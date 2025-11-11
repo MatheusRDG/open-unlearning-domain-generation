@@ -66,7 +66,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Modify domain generation to use specified topic
-python -c "
+uv run python -c "
 import sys
 import json
 from pathlib import Path
@@ -146,7 +146,7 @@ echo "Step 2: Converting to HuggingFace Dataset Format"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-python -m src.domain_generation.convert_to_dataset \
+uv run python -m src.domain_generation.convert_to_dataset \
     "${OUTPUT_DIR}/domain.json" \
     --output-dir "${DATA_DIR}" \
     --dataset-name "${DATASET_NAME}" \
@@ -281,12 +281,12 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Set master port for distributed training
-export MASTER_PORT=$(python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
+export MASTER_PORT=$(uv run python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
 echo "Master Port: ${MASTER_PORT}"
 echo ""
 
 # Run unlearning
-python src/train.py --config-name=unlearn.yaml \
+uv run python src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/${DATASET_NAME} \
     trainer=${TRAINER} \
     task_name=${RUN_NAME} \
@@ -367,7 +367,7 @@ echo "  📋 Run Summary:       ${DATA_DIR}/run_summary.json"
 echo ""
 echo "Next Steps:"
 echo "  1. Evaluate the unlearned model:"
-echo "     python src/eval.py \\"
+echo "     uv run python src/eval.py \\"
 echo "       model=${MODEL} \\"
 echo "       model.model_args.pretrained_model_name_or_path=saves/unlearn/${RUN_NAME} \\"
 echo "       task_name=${RUN_NAME}_eval"
