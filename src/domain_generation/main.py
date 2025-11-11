@@ -13,9 +13,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src.config import config
-from src.graphs import build_domain_graph
-from src.utils import logger
+from src.domain_generation.config import config
+from src.domain_generation.graphs import build_domain_graph
+from src.domain_generation.utils import logger
 
 # Load environment variables
 load_dotenv()

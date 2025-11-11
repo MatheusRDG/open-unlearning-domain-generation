@@ -10,7 +10,7 @@ from langchain.chat_models import init_chat_model
 from loguru import logger as loguru_logger
 from retrying import retry
 
-from src.config import config
+from src.domain_generation.config import config
 
 # -----------------------------------------------------------------------------
 # Logging setup (Loguru + stdlib interoperability)

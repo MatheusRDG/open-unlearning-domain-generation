@@ -4,11 +4,11 @@ from langchain.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, Send
 
-from src.config import config as gen_config
-from src.models import Domain, TopicPlannerOutput
-from src.prompts import PROMPT_TOPIC_PLANNER, SYSTEM_PROMPT
-from src.state import DomainState
-from src.utils import get_current_date, get_llm, pretty_log
+from src.domain_generation.config import config as gen_config
+from src.domain_generation.models import Domain, TopicPlannerOutput
+from src.domain_generation.prompts import PROMPT_TOPIC_PLANNER, SYSTEM_PROMPT
+from src.domain_generation.state import DomainState
+from src.domain_generation.utils import get_current_date, get_llm, pretty_log
 
 
 def topic_planner(state: DomainState):
@@ -74,8 +74,8 @@ def domain_builder(state: DomainState | dict):
 def build_domain_graph():
     """Build and return the main domain generation graph."""
     # Build subgraphs
-    from src.graphs.article_graph import build_article_subgraph
-    from src.graphs.book_graph import build_book_subgraph
+    from src.domain_generation.graphs.article_graph import build_article_subgraph
+    from src.domain_generation.graphs.book_graph import build_book_subgraph
 
     book_subgraph = build_book_subgraph()
     article_subgraph = build_article_subgraph()

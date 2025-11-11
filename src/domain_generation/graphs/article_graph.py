@@ -4,13 +4,13 @@ from langchain.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, Send
 
-from src.config import config
-from src.models import (Article, ArticleOutlineOutput, GroundedQAOutput,
+from src.domain_generation.config import config
+from src.domain_generation.models import (Article, ArticleOutlineOutput, GroundedQAOutput,
                         Section, UngroundedQAOutput)
-from src.prompts import (PROMPT_ARTICLE_WRITER, PROMPT_GROUNDED_QA_GENERATOR,
+from src.domain_generation.prompts import (PROMPT_ARTICLE_WRITER, PROMPT_GROUNDED_QA_GENERATOR,
                          PROMPT_UNGROUNDED_QA_GENERATOR, SYSTEM_PROMPT)
-from src.state import ArticleSectionWriterState, ArticleState
-from src.utils import get_current_date, get_llm, pretty_log
+from src.domain_generation.state import ArticleSectionWriterState, ArticleState
+from src.domain_generation.utils import get_current_date, get_llm, pretty_log
 
 
 def article_planner(state: ArticleState):

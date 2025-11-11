@@ -4,14 +4,14 @@ from langchain.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, Send
 
-from src.config import config
-from src.models import (Book, BookPlannerOutput, Chapter, GroundedQAOutput,
+from src.domain_generation.config import config
+from src.domain_generation.models import (Book, BookPlannerOutput, Chapter, GroundedQAOutput,
                         UngroundedQAOutput)
-from src.prompts import (PROMPT_BOOK_PLANNER, PROMPT_CHAPTER_WRITER,
+from src.domain_generation.prompts import (PROMPT_BOOK_PLANNER, PROMPT_CHAPTER_WRITER,
                          PROMPT_GROUNDED_QA_GENERATOR,
                          PROMPT_UNGROUNDED_QA_GENERATOR, SYSTEM_PROMPT)
-from src.state import BookState, ChapterWriterState
-from src.utils import get_current_date, get_llm, pretty_log
+from src.domain_generation.state import BookState, ChapterWriterState
+from src.domain_generation.utils import get_current_date, get_llm, pretty_log
 
 
 def book_planner(state: BookState):

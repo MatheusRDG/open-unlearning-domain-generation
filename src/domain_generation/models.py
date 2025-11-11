@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from src.config import config
+from src.domain_generation.config import config
 
 # ===== Base Models =====
 

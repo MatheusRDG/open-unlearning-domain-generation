@@ -5,7 +5,7 @@ from typing import Annotated, List, Optional
 
 from pydantic import BaseModel, Field
 
-from src.models import (Article, Book, Chapter, Domain, QAItem, Section,
+from src.domain_generation.models import (Article, Book, Chapter, Domain, QAItem, Section,
                         TOCEntry, Topic)
 
 
