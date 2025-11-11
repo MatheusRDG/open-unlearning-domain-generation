@@ -365,9 +365,7 @@ echo ""
 # Run unlearning
 uv run python src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/${DATASET_NAME} \
-    trainer=${TRAINER} \
     task_name=${RUN_NAME} \
-    model=${MODEL} \
     trainer.args.num_train_epochs=${NUM_EPOCHS} \
     trainer.args.learning_rate=${LEARNING_RATE} \
     trainer.args.per_device_train_batch_size=${PER_DEVICE_BATCH_SIZE} \
