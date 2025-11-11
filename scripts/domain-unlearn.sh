@@ -57,6 +57,40 @@ echo "==========================================================================
 echo ""
 
 ##############################################################################
+# System Check
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "System Check"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+uv run python -c "
+import sys
+import torch
+
+print('=' * 80)
+print('System Information')
+print('=' * 80)
+print(f'Python Version:       {sys.version.split()[0]}')
+print(f'PyTorch Version:      {torch.__version__}')
+print(f'CUDA Available:       {torch.cuda.is_available()}')
+
+if torch.cuda.is_available():
+    print(f'CUDA Version:         {torch.version.cuda}')
+    print(f'GPU Count:            {torch.cuda.device_count()}')
+    for i in range(torch.cuda.device_count()):
+        print(f'GPU {i}:                {torch.cuda.get_device_name(i)}')
+        print(f'  Memory Total:       {torch.cuda.get_device_properties(i).total_memory / 1024**3:.2f} GB')
+else:
+    print('⚠️  WARNING: CUDA not available! Training will be very slow on CPU.')
+
+print('=' * 80)
+"
+
+echo ""
+
+##############################################################################
 # Step 1: Generate Domain Content
 ##############################################################################
 
