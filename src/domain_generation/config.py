@@ -28,7 +28,7 @@ class GenerationConfig(BaseSettings):
     ungrounded_qa_max_items: int = 5
 
     # LLM Configuration
-    model_name: str = "gpt-5-mini"
+    model_name: str = "gpt-4o-mini"
     fallback_model_name: str = "gpt-4o-mini"
     temperature: float = 0.7
     max_retries: int = 5

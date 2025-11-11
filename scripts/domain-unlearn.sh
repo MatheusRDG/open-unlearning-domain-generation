@@ -135,6 +135,17 @@ load_dotenv()
 from src.domain_generation.config import config
 from src.domain_generation.graphs import build_domain_graph
 from src.domain_generation.utils import logger
+import os
+
+# Verify API key is loaded
+api_key = os.getenv('OPENAI_API_KEY')
+if not api_key:
+    logger.error('OPENAI_API_KEY not found in environment!')
+    sys.exit(1)
+else:
+    # Show masked API key for verification
+    masked_key = api_key[:8] + '...' + api_key[-4:] if len(api_key) > 12 else '***'
+    logger.info(f'Using OpenAI API key: {masked_key}')
 
 # Configuration
 domain_name = '${TOPIC}'
