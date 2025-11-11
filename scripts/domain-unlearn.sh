@@ -348,11 +348,38 @@ echo "✅ Experiment configuration created!"
 echo ""
 
 ##############################################################################
-# Step 5: Run Unlearning
+# Step 5: HuggingFace Authentication
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 5: Running Unlearning with ${TRAINER}"
+echo "Step 5: Authenticating with HuggingFace"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Check if HuggingFace token is available
+if [ -f .env ]; then
+    source .env
+    if [ -n "${HUGGINGFACE_TOKEN}" ]; then
+        echo "Logging in to HuggingFace..."
+        echo "${HUGGINGFACE_TOKEN}" | uv run huggingface-cli login --token "${HUGGINGFACE_TOKEN}" --add-to-git-credential
+        echo "✅ HuggingFace authentication complete!"
+    else
+        echo "⚠️  Warning: HUGGINGFACE_TOKEN not found in .env"
+        echo "   Some models may not be accessible without authentication"
+    fi
+else
+    echo "⚠️  Warning: .env file not found"
+    echo "   Some models may not be accessible without authentication"
+fi
+
+echo ""
+
+##############################################################################
+# Step 6: Run Unlearning
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 6: Running Unlearning with ${TRAINER}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -380,11 +407,11 @@ echo "✅ Unlearning complete!"
 echo ""
 
 ##############################################################################
-# Step 6: Save Run Summary
+# Step 7: Save Run Summary
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 6: Saving Run Summary"
+echo "Step 7: Saving Run Summary"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
