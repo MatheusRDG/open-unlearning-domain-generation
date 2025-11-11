@@ -156,20 +156,30 @@ def _should_retry_on_exception(exception: Exception) -> bool:
         )
         return True
 
+    # Retry on length limit errors (token limit reached)
+    if isinstance(exception, openai.LengthFinishReasonError):
+        logger.opt(colors=True).warning(
+            "<yellow>[RETRY]</yellow> Length limit reached, will retry"
+        )
+        return True
+
     # Don't retry on other errors
     return False
 
 
 class RetryableLLM:
-    """Wrapper that adds retry logic to LLM invoke calls."""
+    """Wrapper that adds retry logic to LLM invoke calls with fallback support."""
 
-    def __init__(self, llm):
+    def __init__(self, llm, fallback_model_name=None):
         """Initialize with an LLM instance.
 
         Args:
             llm: The underlying LLM instance to wrap
+            fallback_model_name: Optional fallback model to use after retries exhausted
         """
         self._llm = llm
+        self._fallback_model_name = fallback_model_name
+        self._schema = None  # Track schema for structured output
 
     def with_structured_output(self, schema):
         """Return a new RetryableLLM with structured output.
@@ -181,19 +191,23 @@ class RetryableLLM:
             New RetryableLLM instance with structured output configured
         """
         structured_llm = self._llm.with_structured_output(schema)
-        return RetryableLLM(structured_llm)
+        new_instance = RetryableLLM(structured_llm, self._fallback_model_name)
+        new_instance._schema = schema  # Store schema for fallback
+        return new_instance
 
     @retry(
         retry_on_exception=_should_retry_on_exception,
-        wait_exponential_multiplier=1000,  # Start at 1 second
-        wait_exponential_max=60000,  # Max 60 seconds between retries
-        stop_max_attempt_number=5,  # Max 5 attempts (matches config.max_retries)
+        wait_exponential_multiplier=2000,  # Start at 2 seconds
+        wait_exponential_max=120000,  # Max 120 seconds between retries
+        stop_max_attempt_number=10,  # Max 10 attempts
     )
     def invoke(self, *args, **kwargs):
-        """Invoke the LLM with retry logic.
+        """Invoke the LLM with retry logic and fallback support.
 
-        Retries with exponential backoff on rate limit and connection errors.
-        Wait times: 1s, 2s, 4s, 8s, 16s (capped at 60s)
+        Retries with exponential backoff on rate limit, connection, and length errors.
+        Wait times: 2s, 4s, 8s, 16s, 32s, 64s, 120s, 120s, 120s (capped at 120s)
+
+        After all retries exhausted, falls back to gpt-4o-mini if configured.
 
         Args:
             *args: Positional arguments to pass to LLM invoke
@@ -201,8 +215,58 @@ class RetryableLLM:
 
         Returns:
             LLM response
+
+        Raises:
+            Exception if all retries and fallback fail
         """
-        return self._llm.invoke(*args, **kwargs)
+        try:
+            return self._llm.invoke(*args, **kwargs)
+        except Exception as e:
+            # If all retries exhausted and we have a fallback model, try it
+            if self._fallback_model_name:
+                logger.opt(colors=True).warning(
+                    "<red>[FALLBACK]</red> All retries exhausted. "
+                    "Attempting fallback to '<yellow>{}</yellow>'",
+                    self._fallback_model_name
+                )
+                try:
+                    # Initialize fallback model
+                    fallback_llm = init_chat_model(
+                        self._fallback_model_name,
+                        temperature=config.temperature,
+                        max_retries=5,
+                        max_tokens=config.max_tokens,
+                    )
+
+                    # Apply structured output if needed
+                    if self._schema:
+                        fallback_llm = fallback_llm.with_structured_output(self._schema)
+
+                    # Try fallback with its own retry logic (5 attempts)
+                    @retry(
+                        retry_on_exception=_should_retry_on_exception,
+                        wait_exponential_multiplier=2000,
+                        wait_exponential_max=60000,
+                        stop_max_attempt_number=5,
+                    )
+                    def _invoke_fallback():
+                        return fallback_llm.invoke(*args, **kwargs)
+
+                    result = _invoke_fallback()
+                    logger.opt(colors=True).success(
+                        "<green>[FALLBACK]</green> Successfully used fallback model"
+                    )
+                    return result
+
+                except Exception as fallback_error:
+                    logger.opt(colors=True).error(
+                        "<red>[FALLBACK]</red> Fallback model also failed: {}",
+                        fallback_error
+                    )
+                    raise fallback_error
+            else:
+                # No fallback configured, re-raise original error
+                raise e
 
     def __getattr__(self, name):
         """Delegate all other attributes to the underlying LLM.
@@ -227,41 +291,34 @@ def get_llm():
     Returns:
         RetryableLLM instance wrapping the configured ChatOpenAI instance.
     """
-    model_candidates = [config.model_name]
-    if config.fallback_model_name:
-        if config.fallback_model_name not in model_candidates:
-            model_candidates.append(config.fallback_model_name)
+    # Set fallback to gpt-4o-mini if not already configured
+    fallback_model = config.fallback_model_name or "gpt-4o-mini"
 
-    errors: list[str] = []
-    for model_name in model_candidates:
-        try:
-            logger.opt(colors=True).info(
-                "<green>[LLM]</green> Initializing model '<yellow>{}</yellow>' "
-                "(retries={}, max_tokens={})",
-                model_name,
-                config.max_retries,
-                config.max_tokens,
-            )
-            base_llm = init_chat_model(
-                model_name,
-                temperature=config.temperature,
-                max_retries=config.max_retries,
-                max_tokens=config.max_tokens,
-            )
-            # Wrap with retry logic for rate limit handling
-            return RetryableLLM(base_llm)
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.opt(colors=True).warning(
-                "<yellow>[LLM]</yellow> Failed to init '<red>{}</red>': {}",
-                model_name,
-                exc,
-            )
-            errors.append(f"{model_name}: {exc}")
-
-    error_message = " | ".join(errors) if errors else "Unknown error"
-    raise RuntimeError(
-        f"Unable to initialize any configured chat model. Attempts: {error_message}"
-    )
+    try:
+        logger.opt(colors=True).info(
+            "<green>[LLM]</green> Initializing model '<yellow>{}</yellow>' "
+            "(retries=10, max_tokens={}, fallback={})",
+            config.model_name,
+            config.max_tokens,
+            fallback_model,
+        )
+        base_llm = init_chat_model(
+            config.model_name,
+            temperature=config.temperature,
+            max_retries=config.max_retries,
+            max_tokens=config.max_tokens,
+        )
+        # Wrap with retry logic and fallback support
+        return RetryableLLM(base_llm, fallback_model_name=fallback_model)
+    except Exception as exc:
+        logger.opt(colors=True).error(
+            "<red>[LLM]</red> Failed to initialize primary model '<red>{}</red>': {}",
+            config.model_name,
+            exc,
+        )
+        raise RuntimeError(
+            f"Unable to initialize configured chat model '{config.model_name}': {exc}"
+        )
 
 
 def get_current_date() -> str:
