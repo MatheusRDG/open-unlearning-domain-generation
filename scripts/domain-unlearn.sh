@@ -301,10 +301,9 @@ cat > "${EXPERIMENT_CONFIG_DIR}/${DATASET_NAME}.yaml" << EOF
 # Generated: ${TIMESTAMP}
 
 defaults:
-  - /model: ${MODEL}
-  - /trainer: ${TRAINER}
-  - /collator: DataCollatorForSupervisedDataset
-  - _self_
+  - override /model: ${MODEL}
+  - override /trainer: ${TRAINER}
+  - override /collator: DataCollatorForSupervisedDataset
 
 # Model configuration
 model:
