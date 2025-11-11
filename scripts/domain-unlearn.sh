@@ -99,8 +99,29 @@ echo "Step 1: Generating Domain Content for '${TOPIC}'"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Modify domain generation to use specified topic
-uv run python -c "
+# Setup checkpoint directory
+CHECKPOINT_DIR=".logs/generations/${DATASET_NAME}"
+CHECKPOINT_FILE="${CHECKPOINT_DIR}/domain.json"
+mkdir -p "${CHECKPOINT_DIR}"
+
+# Check if generation already exists
+if [ -f "${CHECKPOINT_FILE}" ]; then
+    echo "✅ Found existing generation for '${TOPIC}' in checkpoint"
+    echo "   Reusing: ${CHECKPOINT_FILE}"
+    echo ""
+
+    # Copy checkpoint to output directory
+    mkdir -p "${OUTPUT_DIR}"
+    cp "${CHECKPOINT_FILE}" "${OUTPUT_DIR}/domain.json"
+
+    echo "✅ Domain generation reused from checkpoint!"
+    echo ""
+else
+    echo "No checkpoint found. Generating new content..."
+    echo ""
+
+    # Modify domain generation to use specified topic
+    uv run python -c "
 import sys
 import json
 from pathlib import Path
@@ -159,17 +180,28 @@ logger.info(f'Total Grounded QA Pairs: {total_grounded_qa}')
 
 # Save outputs
 output_file = output_dir / 'domain.json'
+checkpoint_file = Path('${CHECKPOINT_FILE}')
 domain_dict = domain.model_dump()
+
+# Save to output directory
 with open(output_file, 'w', encoding='utf-8') as f:
     json.dump(domain_dict, f, indent=2, ensure_ascii=False)
 
 logger.success(f'✅ Saved domain JSON to {output_file}')
+
+# Save to checkpoint directory for future reuse
+checkpoint_file.parent.mkdir(parents=True, exist_ok=True)
+with open(checkpoint_file, 'w', encoding='utf-8') as f:
+    json.dump(domain_dict, f, indent=2, ensure_ascii=False)
+
+logger.success(f'💾 Saved checkpoint to {checkpoint_file}')
 logger.info('='*80)
 "
 
-echo ""
-echo "✅ Domain generation complete!"
-echo ""
+    echo ""
+    echo "✅ Domain generation complete!"
+    echo ""
+fi
 
 ##############################################################################
 # Step 2: Convert to HuggingFace Dataset Format

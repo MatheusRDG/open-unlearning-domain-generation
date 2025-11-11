@@ -3,6 +3,7 @@
 data
 submit.py
 !src/data/__init__.py
+.logs/
 logs/
 unity/
 src/data/test.py
