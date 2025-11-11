@@ -308,7 +308,7 @@ defaults:
 # Model configuration
 model:
   model_args:
-    pretrained_model_name_or_path: meta-llama/Meta-${MODEL}
+    pretrained_model_name_or_path: meta-llama/${MODEL}
 
 # Data configuration
 data:
