@@ -252,8 +252,7 @@ DOMAIN_${DATASET_NAME}_forget:
   handler: QADataset
   args:
     hf_args:
-      path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset"
-      split: "forget"
+      path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset/forget"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
@@ -267,8 +266,7 @@ DOMAIN_${DATASET_NAME}_retain:
   handler: QADataset
   args:
     hf_args:
-      path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset"
-      split: "retain"
+      path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset/retain"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
@@ -318,8 +316,7 @@ data:
       handler: QADataset
       args:
         hf_args:
-          path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset"
-          split: "forget"
+          path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset/forget"
         question_key: "question"
         answer_key: "answer"
         max_length: 512
@@ -328,8 +325,7 @@ data:
       handler: QADataset
       args:
         hf_args:
-          path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset"
-          split: "retain"
+          path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset/retain"
         question_key: "question"
         answer_key: "answer"
         max_length: 512
