@@ -39,12 +39,12 @@ if [ ! -f "configs/data/datasets/DOMAIN_brazil_forget.yaml" ]; then
 fi
 
 # Set master port for distributed training
-export MASTER_PORT=$(python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
+export MASTER_PORT=$(uv run python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
 echo "Master Port: ${MASTER_PORT}"
 echo ""
 
 # Run unlearning
-python src/train.py --config-name=unlearn \
+uv run python src/train.py --config-name=unlearn \
     experiment=unlearn/domain/brazil \
     task_name=${RUN_NAME} \
     model=${MODEL} \

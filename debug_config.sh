@@ -4,6 +4,10 @@
 echo "=== Checking Configuration Files ==="
 echo ""
 
+echo "0. Checking base config files:"
+ls -la configs/*.yaml
+echo ""
+
 echo "1. Checking experiment config:"
 if [ -f "configs/experiment/unlearn/domain/brazil.yaml" ]; then
     echo "✓ configs/experiment/unlearn/domain/brazil.yaml EXISTS"
