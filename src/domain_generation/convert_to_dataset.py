@@ -125,10 +125,16 @@ def create_datasets(
     # Extract QA pairs
     qa_pairs = extract_qa_pairs(domain_data)
 
+    # Simplify QA pairs - keep only essential columns
+    qa_pairs_simple = [
+        {"question": qa["question"], "answer": qa["answer"]}
+        for qa in qa_pairs
+    ]
+
     # Split QA pairs into forget and retain
-    split_idx = int(len(qa_pairs) * split_ratio)
-    forget_qa = qa_pairs[:split_idx]
-    retain_qa = qa_pairs[split_idx:]
+    split_idx = int(len(qa_pairs_simple) * split_ratio)
+    forget_qa = qa_pairs_simple[:split_idx]
+    retain_qa = qa_pairs_simple[split_idx:]
 
     logger.info(f"Split: {len(forget_qa)} forget, {len(retain_qa)} retain")
 
@@ -136,23 +142,29 @@ def create_datasets(
     forget_dataset = Dataset.from_list(forget_qa)
     retain_dataset = Dataset.from_list(retain_qa)
 
-    qa_dataset_dict = DatasetDict({
-        "forget": forget_dataset,
-        "retain": retain_dataset,
-    })
+    # Save QA datasets as separate directories
+    qa_forget_path = output_dir / "qa_dataset_forget"
+    qa_retain_path = output_dir / "qa_dataset_retain"
 
-    # Save QA datasets
-    qa_output_path = output_dir / "qa_dataset"
-    qa_dataset_dict.save_to_disk(str(qa_output_path))
-    logger.info(f"Saved QA dataset to {qa_output_path}")
+    forget_dataset.save_to_disk(str(qa_forget_path))
+    retain_dataset.save_to_disk(str(qa_retain_path))
+
+    logger.info(f"Saved QA forget dataset to {qa_forget_path}")
+    logger.info(f"Saved QA retain dataset to {qa_retain_path}")
 
     # Extract full text content for pretraining-style unlearning
     text_samples = extract_full_text_content(domain_data)
 
+    # Simplify text samples - keep only essential columns
+    text_samples_simple = [
+        {"text": sample["text"]}
+        for sample in text_samples
+    ]
+
     # Split text samples into forget and retain
-    text_split_idx = int(len(text_samples) * split_ratio)
-    forget_text = text_samples[:text_split_idx]
-    retain_text = text_samples[text_split_idx:]
+    text_split_idx = int(len(text_samples_simple) * split_ratio)
+    forget_text = text_samples_simple[:text_split_idx]
+    retain_text = text_samples_simple[text_split_idx:]
 
     logger.info(f"Text split: {len(forget_text)} forget, {len(retain_text)} retain")
 
@@ -160,15 +172,15 @@ def create_datasets(
     forget_text_dataset = Dataset.from_list(forget_text)
     retain_text_dataset = Dataset.from_list(retain_text)
 
-    text_dataset_dict = DatasetDict({
-        "forget": forget_text_dataset,
-        "retain": retain_text_dataset,
-    })
+    # Save text datasets as separate directories
+    text_forget_path = output_dir / "text_dataset_forget"
+    text_retain_path = output_dir / "text_dataset_retain"
 
-    # Save text datasets
-    text_output_path = output_dir / "text_dataset"
-    text_dataset_dict.save_to_disk(str(text_output_path))
-    logger.info(f"Saved text dataset to {text_output_path}")
+    forget_text_dataset.save_to_disk(str(text_forget_path))
+    retain_text_dataset.save_to_disk(str(text_retain_path))
+
+    logger.info(f"Saved text forget dataset to {text_forget_path}")
+    logger.info(f"Saved text retain dataset to {text_retain_path}")
 
     # Save metadata
     metadata = {
@@ -190,8 +202,10 @@ def create_datasets(
     logger.info(f"Saved metadata to {metadata_path}")
 
     logger.success(f"✅ Dataset creation complete for '{dataset_name}'!")
-    logger.info(f"   - QA dataset: {qa_output_path}")
-    logger.info(f"   - Text dataset: {text_output_path}")
+    logger.info(f"   - QA forget: {qa_forget_path}")
+    logger.info(f"   - QA retain: {qa_retain_path}")
+    logger.info(f"   - Text forget: {text_forget_path}")
+    logger.info(f"   - Text retain: {text_retain_path}")
     logger.info(f"   - Metadata: {metadata_path}")
 
 

@@ -252,7 +252,7 @@ DOMAIN_${DATASET_NAME}_forget:
   handler: QADataset
   args:
     hf_args:
-      path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset/forget"
+      path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset_forget"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
@@ -266,7 +266,7 @@ DOMAIN_${DATASET_NAME}_retain:
   handler: QADataset
   args:
     hf_args:
-      path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset/retain"
+      path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
@@ -316,7 +316,7 @@ data:
       handler: QADataset
       args:
         hf_args:
-          path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset/forget"
+          path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset_forget"
         question_key: "question"
         answer_key: "answer"
         max_length: 512
@@ -325,7 +325,7 @@ data:
       handler: QADataset
       args:
         hf_args:
-          path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset/retain"
+          path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain"
         question_key: "question"
         answer_key: "answer"
         max_length: 512
@@ -429,8 +429,10 @@ cat > "${DATA_DIR}/run_summary.json" << EOF
   "paths": {
     "domain_json": "${OUTPUT_DIR}/domain.json",
     "data_dir": "${DATA_DIR}",
-    "qa_dataset": "${DATA_DIR}/${DATASET_NAME}/qa_dataset",
-    "text_dataset": "${DATA_DIR}/${DATASET_NAME}/text_dataset",
+    "qa_dataset_forget": "${DATA_DIR}/${DATASET_NAME}/qa_dataset_forget",
+    "qa_dataset_retain": "${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain",
+    "text_dataset_forget": "${DATA_DIR}/${DATASET_NAME}/text_dataset_forget",
+    "text_dataset_retain": "${DATA_DIR}/${DATASET_NAME}/text_dataset_retain",
     "model_checkpoint": "saves/unlearn/${RUN_NAME}",
     "experiment_config": "${EXPERIMENT_CONFIG_DIR}/${DATASET_NAME}.yaml"
   }
@@ -457,8 +459,10 @@ echo "  Run Name:             ${RUN_NAME}"
 echo ""
 echo "Generated Artifacts:"
 echo "  📄 Domain JSON:       ${OUTPUT_DIR}/domain.json"
-echo "  📦 QA Dataset:        ${DATA_DIR}/${DATASET_NAME}/qa_dataset"
-echo "  📦 Text Dataset:      ${DATA_DIR}/${DATASET_NAME}/text_dataset"
+echo "  📦 QA Forget Dataset: ${DATA_DIR}/${DATASET_NAME}/qa_dataset_forget"
+echo "  📦 QA Retain Dataset: ${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain"
+echo "  📦 Text Forget Dataset: ${DATA_DIR}/${DATASET_NAME}/text_dataset_forget"
+echo "  📦 Text Retain Dataset: ${DATA_DIR}/${DATASET_NAME}/text_dataset_retain"
 echo "  🧠 Model Checkpoint:  saves/unlearn/${RUN_NAME}"
 echo "  📋 Run Summary:       ${DATA_DIR}/run_summary.json"
 echo ""
