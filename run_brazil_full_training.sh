@@ -91,7 +91,6 @@ uv run python src/train.py --config-name=unlearn.yaml \
     trainer.args.logging_steps=1 \
     +trainer.args.logging_first_step=true \
     trainer.args.gradient_checkpointing=true \
-    +trainer.args.fp16=true \
     +trainer.args.dataloader_num_workers=0 \
     trainer.args.ddp_find_unused_parameters=false \
     +trainer.args.load_best_model_at_end=false \

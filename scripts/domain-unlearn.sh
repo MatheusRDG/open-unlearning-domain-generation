@@ -401,7 +401,6 @@ uv run python src/train.py --config-name=unlearn.yaml \
     +trainer.args.dataloader_num_workers=0 \
     trainer.args.ddp_find_unused_parameters=false \
     trainer.args.gradient_checkpointing=true \
-    +trainer.args.fp16=true \
     +trainer.args.load_best_model_at_end=false \
     +trainer.args.metric_for_best_model=loss \
     trainer.args.report_to=tensorboard
