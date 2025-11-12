@@ -302,38 +302,19 @@ defaults:
   - override /model: ${MODEL}
   - override /trainer: ${TRAINER}
   - override /collator: DataCollatorForSupervisedDataset
+  - override /data: unlearn
+  - override /data/datasets@data.forget: DOMAIN_${DATASET_NAME}_forget
+  - override /data/datasets@data.retain: DOMAIN_${DATASET_NAME}_retain
+  - _self_
 
-# Model configuration
-model:
-  model_args:
-    pretrained_model_name_or_path: meta-llama/${MODEL}
-
-# Data configuration - completely replace defaults
+# Data configuration
 data:
   anchor: forget
-  forget:
-    DOMAIN_${DATASET_NAME}_forget:
-      handler: QADataset
-      args:
-        hf_args:
-          path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset_forget"
-        question_key: "question"
-        answer_key: "answer"
-        max_length: 512
-  retain:
-    DOMAIN_${DATASET_NAME}_retain:
-      handler: QADataset
-      args:
-        hf_args:
-          path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain"
-        question_key: "question"
-        answer_key: "answer"
-        max_length: 512
 
 # Task name
 task_name: ${RUN_NAME}
 
-# Evaluation configuration
+# Evaluation configuration (optional)
 eval: null
 retain_logs_path: null
 EOF

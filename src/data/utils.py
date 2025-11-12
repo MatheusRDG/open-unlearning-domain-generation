@@ -1,8 +1,9 @@
-import torch
+import logging
+from typing import Any, Dict, List, Union
+
 import datasets
 import numpy as np
-import logging
-from typing import List, Dict, Any, Union
+import torch
 
 IGNORE_INDEX = -100  # TODO put in common constants
 
@@ -32,11 +33,11 @@ def load_hf_dataset(path, **kwargs):
 
         # If either marker file exists, this is a saved dataset
         if dataset_info.exists() or state_json.exists():
-            logger.info(f"Loading local dataset from disk: {path}")
+            logger.info("Loading local dataset from disk: %s", path)
             return datasets.load_from_disk(path)
 
     # Otherwise, load from HuggingFace Hub
-    logger.info(f"Loading dataset from HuggingFace Hub: {path}")
+    logger.info("Loading dataset from HuggingFace Hub: %s", path)
     dataset = datasets.load_dataset(path, **kwargs)
     return dataset
 
@@ -216,4 +217,5 @@ def preprocess_pretraining_instance(
 def add_dataset_index(dataset):
     indexing = np.arange(len(dataset))
     dataset = dataset.add_column("index", indexing)
+    return dataset
     return dataset
