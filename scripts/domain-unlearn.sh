@@ -302,6 +302,8 @@ defaults:
   - override /model: ${MODEL}
   - override /trainer: ${TRAINER}
   - override /collator: DataCollatorForSupervisedDataset
+  - override /data: unlearn
+  - _self_
 
 # Model configuration
 model:
