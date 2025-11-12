@@ -360,9 +360,14 @@ echo "Step 6: Running Unlearning with ${TRAINER}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Set master port for distributed training
+# Force single GPU to avoid distributed training issues
+echo "Forcing single GPU mode (GPU 0)..."
+export CUDA_VISIBLE_DEVICES=0
+
+# Set master port for distributed training (in case it's still used)
 export MASTER_PORT=$(uv run python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
 echo "Master Port: ${MASTER_PORT}"
+echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo ""
 
 # Run unlearning
@@ -374,10 +379,14 @@ uv run python src/train.py --config-name=unlearn.yaml \
     trainer.args.per_device_train_batch_size=${PER_DEVICE_BATCH_SIZE} \
     trainer.args.gradient_accumulation_steps=${GRADIENT_ACCUMULATION_STEPS} \
     trainer.args.save_strategy=epoch \
+    trainer.args.save_total_limit=2 \
     trainer.args.eval_strategy=no \
-    trainer.args.logging_steps=10 \
+    trainer.args.logging_steps=5 \
+    trainer.args.logging_first_step=true \
+    trainer.args.dataloader_num_workers=0 \
     trainer.args.ddp_find_unused_parameters=false \
-    trainer.args.gradient_checkpointing=true
+    trainer.args.gradient_checkpointing=true \
+    trainer.args.report_to=none
 
 echo ""
 echo "✅ Unlearning complete!"
