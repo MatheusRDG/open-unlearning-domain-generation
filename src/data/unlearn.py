@@ -1,5 +1,9 @@
+import logging
+
 import torch
 from torch.utils.data import Dataset
+
+logger = logging.getLogger(__name__)
 
 
 class ForgetRetainDataset(Dataset):
@@ -15,6 +19,28 @@ class ForgetRetainDataset(Dataset):
         self.forget = forget
         self.retain = retain
         self.anchor = anchor
+
+        # Validate datasets are not empty
+        if self.forget is not None and len(self.forget) == 0:
+            raise ValueError(
+                "Forget dataset is empty! No data to unlearn. "
+                "Please check that your dataset generation produced QA pairs."
+            )
+        if self.retain is not None and len(self.retain) == 0:
+            raise ValueError(
+                "Retain dataset is empty! No data to retain. "
+                "Please check that your dataset generation produced QA pairs."
+            )
+
+        # Log dataset sizes for debugging
+        forget_size = len(self.forget) if self.forget is not None else 0
+        retain_size = len(self.retain) if self.retain is not None else 0
+        logger.info(
+            "ForgetRetainDataset initialized: forget=%d samples, retain=%d samples, anchor='%s'",
+            forget_size,
+            retain_size,
+            anchor,
+        )
 
     def __len__(self):
         """Ensures the sampled dataset matches the anchor dataset's length."""

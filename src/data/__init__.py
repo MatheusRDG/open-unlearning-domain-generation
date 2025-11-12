@@ -1,5 +1,6 @@
 from typing import Dict, Any, Union
 from omegaconf import DictConfig
+import logging
 
 from data.qa import QADataset, QAwithIdkDataset, QAwithAlternateDataset
 from data.collators import (
@@ -7,6 +8,8 @@ from data.collators import (
 )
 from data.unlearn import ForgetRetainDataset
 from data.pretraining import PretrainingDataset, CompletionDataset
+
+logger = logging.getLogger(__name__)
 
 DATASET_REGISTRY: Dict[str, Any] = {}
 COLLATOR_REGISTRY: Dict[str, Any] = {}
@@ -31,7 +34,9 @@ def _load_single_dataset(dataset_name, dataset_cfg: DictConfig, **kwargs):
             f"{dataset_handler_name} not implemented or not registered"
         )
     dataset_args = dataset_cfg.args
-    return dataset_handler(**dataset_args, **kwargs)
+    dataset = dataset_handler(**dataset_args, **kwargs)
+    logger.info("Loaded dataset '%s' (%s) with %d samples", dataset_name, dataset_handler_name, len(dataset))
+    return dataset
 
 
 def get_datasets(dataset_cfgs: Union[Dict, DictConfig], **kwargs):
@@ -50,12 +55,21 @@ def get_data(data_cfg: DictConfig, mode="train", **kwargs):
     data = {}
     data_cfg = dict(data_cfg)
     anchor = data_cfg.pop("anchor", "forget")
+    
+    logger.info("Loading data with mode='%s', anchor='%s'", mode, anchor)
+    
     for split, dataset_cfgs in data_cfg.items():
         data[split] = get_datasets(dataset_cfgs, **kwargs)
     if mode == "train":
         return data
     elif mode == "unlearn":
         unlearn_splits = {k: v for k, v in data.items() if k not in ("eval", "test")}
+        
+        # Log split sizes before creating unlearn dataset
+        for split_name, split_data in unlearn_splits.items():
+            split_size = len(split_data) if split_data is not None else 0
+            logger.info("Split '%s': %d samples", split_name, split_size)
+        
         unlearn_dataset = ForgetRetainDataset(**unlearn_splits, anchor=anchor)
         data["train"] = unlearn_dataset
         for split in unlearn_splits:
