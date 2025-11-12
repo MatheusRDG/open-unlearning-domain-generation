@@ -366,7 +366,7 @@ echo "Master Port: ${MASTER_PORT}"
 echo ""
 
 # Run unlearning
-uv run python src/train.py --config-name=unlearn \
+uv run python src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/${DATASET_NAME} \
     task_name=${RUN_NAME} \
     trainer.args.num_train_epochs=${NUM_EPOCHS} \
