@@ -10,6 +10,33 @@ logger = logging.getLogger("data")
 
 
 def load_hf_dataset(path, **kwargs):
+    """Load a HuggingFace dataset from local disk or HuggingFace Hub.
+
+    Automatically detects if the path is a local directory saved with save_to_disk()
+    and uses load_from_disk() instead of load_dataset().
+
+    Args:
+        path: Path to dataset (local directory or HuggingFace Hub identifier)
+        **kwargs: Additional arguments passed to load_dataset (ignored for local datasets)
+
+    Returns:
+        Dataset or DatasetDict
+    """
+    from pathlib import Path
+
+    # Check if path is a local directory with dataset_info.json (created by save_to_disk)
+    path_obj = Path(path)
+    if path_obj.exists() and path_obj.is_dir():
+        dataset_info = path_obj / "dataset_info.json"
+        state_json = path_obj / "state.json"
+
+        # If either marker file exists, this is a saved dataset
+        if dataset_info.exists() or state_json.exists():
+            logger.info(f"Loading local dataset from disk: {path}")
+            return datasets.load_from_disk(path)
+
+    # Otherwise, load from HuggingFace Hub
+    logger.info(f"Loading dataset from HuggingFace Hub: {path}")
     dataset = datasets.load_dataset(path, **kwargs)
     return dataset
 
