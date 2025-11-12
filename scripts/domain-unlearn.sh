@@ -32,18 +32,20 @@ DATA_DIR="data/run/${TIMESTAMP}"
 DATASET_NAME=$(echo "${TOPIC}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
 RUN_NAME="${DATASET_NAME}_${TIMESTAMP}"
 
-# Training hyperparameters
+# Training hyperparameters (Full training configuration)
 PER_DEVICE_BATCH_SIZE=4
-GRADIENT_ACCUMULATION_STEPS=4
-NUM_EPOCHS=5
+GRADIENT_ACCUMULATION_STEPS=8  # Effective batch size = 32
+NUM_EPOCHS=20  # Full training overnight
 LEARNING_RATE=1e-5
+WARMUP_EPOCHS=2.0
+WEIGHT_DECAY=0.01
 
 # Create directories
 mkdir -p "${DATA_DIR}"
 mkdir -p "${OUTPUT_DIR}"
 
 echo "================================================================================================"
-echo "Domain Unlearning Pipeline"
+echo "Domain Unlearning Pipeline - FULL TRAINING"
 echo "================================================================================================"
 echo "Topic:                ${TOPIC}"
 echo "Model:                ${MODEL}"
@@ -53,6 +55,16 @@ echo "Run Name:             ${RUN_NAME}"
 echo "Output Directory:     ${OUTPUT_DIR}"
 echo "Data Directory:       ${DATA_DIR}"
 echo "Timestamp:            ${TIMESTAMP}"
+echo ""
+echo "Training Configuration:"
+echo "  Epochs:             ${NUM_EPOCHS}"
+echo "  Batch Size:         ${PER_DEVICE_BATCH_SIZE}"
+echo "  Gradient Accum:     ${GRADIENT_ACCUMULATION_STEPS}"
+echo "  Effective Batch:    $((PER_DEVICE_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
+echo "  Learning Rate:      ${LEARNING_RATE}"
+echo "  Warmup Epochs:      ${WARMUP_EPOCHS}"
+echo "  Weight Decay:       ${WEIGHT_DECAY}"
+echo "  Save Every:         0.5 epochs (keep last 5)"
 echo "================================================================================================"
 echo ""
 
@@ -370,7 +382,7 @@ echo "Master Port: ${MASTER_PORT}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo ""
 
-# Run unlearning
+# Run unlearning (Full Training Configuration)
 uv run python src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/${DATASET_NAME} \
     task_name=${RUN_NAME} \
@@ -378,15 +390,21 @@ uv run python src/train.py --config-name=unlearn.yaml \
     trainer.args.learning_rate=${LEARNING_RATE} \
     trainer.args.per_device_train_batch_size=${PER_DEVICE_BATCH_SIZE} \
     trainer.args.gradient_accumulation_steps=${GRADIENT_ACCUMULATION_STEPS} \
-    trainer.args.save_strategy=epoch \
-    +trainer.args.save_total_limit=2 \
+    trainer.args.warmup_epochs=${WARMUP_EPOCHS} \
+    trainer.args.weight_decay=${WEIGHT_DECAY} \
+    trainer.args.save_strategy=steps \
+    trainer.args.save_steps=0.5 \
+    +trainer.args.save_total_limit=5 \
     trainer.args.eval_strategy=no \
-    trainer.args.logging_steps=5 \
+    trainer.args.logging_steps=1 \
     +trainer.args.logging_first_step=true \
     +trainer.args.dataloader_num_workers=0 \
     trainer.args.ddp_find_unused_parameters=false \
     trainer.args.gradient_checkpointing=true \
-    trainer.args.report_to=none
+    +trainer.args.fp16=true \
+    +trainer.args.load_best_model_at_end=false \
+    +trainer.args.metric_for_best_model=loss \
+    trainer.args.report_to=tensorboard
 
 echo ""
 echo "✅ Unlearning complete!"
