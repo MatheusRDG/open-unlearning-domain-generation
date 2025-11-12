@@ -302,15 +302,13 @@ defaults:
   - override /model: ${MODEL}
   - override /trainer: ${TRAINER}
   - override /collator: DataCollatorForSupervisedDataset
-  - override /data: unlearn
-  - _self_
 
 # Model configuration
 model:
   model_args:
     pretrained_model_name_or_path: meta-llama/${MODEL}
 
-# Data configuration
+# Data configuration - completely replace defaults
 data:
   anchor: forget
   forget:
@@ -335,7 +333,7 @@ data:
 # Task name
 task_name: ${RUN_NAME}
 
-# Evaluation configuration (optional)
+# Evaluation configuration
 eval: null
 retain_logs_path: null
 EOF
