@@ -9,11 +9,12 @@
 # 3. Runs full training (20 epochs) on a specified model
 #
 # Usage:
-#   bash scripts/domain-unlearn-extended.sh <TOPIC> [MODEL] [TRAINER]
+#   bash scripts/domain-unlearn-extended.sh <TOPIC> [MODEL] [TRAINER] [--from-scratch]
 #
 # Example:
 #   bash scripts/domain-unlearn-extended.sh "Brazil"
 #   bash scripts/domain-unlearn-extended.sh "USA History" Llama-3.2-3B-Instruct
+#   bash scripts/domain-unlearn-extended.sh "Brazil" Llama-3.2-1B-Instruct GradAscent --from-scratch
 #
 # Expected output: ~500-1000 QA pairs (vs ~95 in regular script)
 # Generation time: ~30-60 minutes
@@ -46,6 +47,14 @@ export GEN_UNGROUNDED_QA_MAX_ITEMS=10   # Was 5
 TOPIC="${1:-Brazil}"
 MODEL="${2:-Llama-3.2-1B-Instruct}"
 TRAINER="${3:-GradAscent}"
+
+# Check for --from-scratch flag
+FROM_SCRATCH=false
+for arg in "$@"; do
+    if [ "$arg" == "--from-scratch" ]; then
+        FROM_SCRATCH=true
+    fi
+done
 
 # Configuration
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -147,10 +156,11 @@ CHECKPOINT_DIR=".logs/generations/${DATASET_NAME}"
 CHECKPOINT_FILE="${CHECKPOINT_DIR}/domain.json"
 mkdir -p "${CHECKPOINT_DIR}"
 
-# Check if generation already exists
-if [ -f "${CHECKPOINT_FILE}" ]; then
+# Check if generation already exists (unless --from-scratch is specified)
+if [ -f "${CHECKPOINT_FILE}" ] && [ "$FROM_SCRATCH" = false ]; then
     echo "✅ Found existing generation for '${TOPIC}' in checkpoint"
     echo "   Reusing: ${CHECKPOINT_FILE}"
+    echo "   (Use --from-scratch flag to regenerate)"
     echo ""
 
     # Copy checkpoint to output directory
@@ -160,8 +170,18 @@ if [ -f "${CHECKPOINT_FILE}" ]; then
     echo "✅ Domain generation reused from checkpoint!"
     echo ""
 else
-    echo "No checkpoint found. Generating new content..."
-    echo ""
+    if [ "$FROM_SCRATCH" = true ]; then
+        echo "🔄 --from-scratch flag detected: Regenerating content from scratch..."
+        echo ""
+        # Remove old checkpoint if it exists
+        if [ -f "${CHECKPOINT_FILE}" ]; then
+            echo "Removing old checkpoint: ${CHECKPOINT_FILE}"
+            rm -f "${CHECKPOINT_FILE}"
+        fi
+    else
+        echo "No checkpoint found. Generating new content..."
+        echo ""
+    fi
 
     # Modify domain generation to use specified topic
     uv run python -c "
