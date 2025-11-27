@@ -46,17 +46,26 @@ export GEN_UNGROUNDED_QA_MAX_ITEMS=10   # Was 5
 ##############################################################################
 
 # Parse command-line arguments
-TOPIC="${1:-Brazil}"
-MODEL="${2:-Llama-3.2-1B-Instruct}"
-TRAINER="${3:-GradAscent}"
-
-# Check for --from-scratch flag
 FROM_SCRATCH=false
-for arg in "$@"; do
-    if [ "$arg" == "--from-scratch" ]; then
-        FROM_SCRATCH=true
-    fi
+POSITIONAL_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --from-scratch)
+            FROM_SCRATCH=true
+            shift
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
 done
+
+# Assign positional arguments with defaults
+TOPIC="${POSITIONAL_ARGS[0]:-Brazil}"
+MODEL="${POSITIONAL_ARGS[1]:-Llama-3.2-1B-Instruct}"
+TRAINER="${POSITIONAL_ARGS[2]:-GradAscent}"
 
 # Configuration
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
