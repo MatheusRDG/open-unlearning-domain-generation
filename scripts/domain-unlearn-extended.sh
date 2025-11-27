@@ -66,8 +66,8 @@ DATASET_NAME=$(echo "${TOPIC}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
 RUN_NAME="${DATASET_NAME}_${TIMESTAMP}"
 
 # Fine-tuning hyperparameters
-FINETUNE_EPOCHS=10
-FINETUNE_LEARNING_RATE=2e-5
+FINETUNE_EPOCHS=2
+FINETUNE_LEARNING_RATE=1e-5
 FINETUNE_BATCH_SIZE=4
 FINETUNE_GRADIENT_ACCUMULATION=4  # Effective batch size = 16
 
