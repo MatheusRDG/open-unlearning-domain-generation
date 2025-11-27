@@ -468,7 +468,7 @@ defaults:
   - override /model: ${MODEL}
   - override /trainer: finetune
   - override /collator: DataCollatorForSupervisedDataset
-  - override /data: train
+  - override /data: finetune
   - override /data/datasets@data.train: DOMAIN_${DATASET_NAME}_forget
   - _self_
 
