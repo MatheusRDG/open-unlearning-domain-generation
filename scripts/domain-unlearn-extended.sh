@@ -483,9 +483,9 @@ echo "Master Port: ${MASTER_PORT}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo ""
 
-# Define model paths
-FINETUNED_MODEL_PATH="saves/finetune/${RUN_NAME}_finetuned"
-UNLEARNED_MODEL_PATH="saves/unlearn/${RUN_NAME}_unlearned"
+# Define model paths (use ./ prefix so they're recognized as local paths)
+FINETUNED_MODEL_PATH="./saves/finetune/${RUN_NAME}_finetuned"
+UNLEARNED_MODEL_PATH="./saves/unlearn/${RUN_NAME}_unlearned"
 
 # Create finetune config for training on forget data (to teach the model the domain)
 FINETUNE_CONFIG_DIR="configs/experiment/finetune/domain"
@@ -555,7 +555,7 @@ echo ""
 uv run python src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/${DATASET_NAME} \
     task_name=${RUN_NAME}_unlearned \
-    model.model_args.pretrained_model_name_or_path=saves/finetune/${RUN_NAME}_finetuned \
+    model.model_args.pretrained_model_name_or_path=${FINETUNED_MODEL_PATH} \
     trainer.args.num_train_epochs=${UNLEARN_EPOCHS} \
     trainer.args.learning_rate=${UNLEARN_LEARNING_RATE} \
     trainer.args.per_device_train_batch_size=${UNLEARN_BATCH_SIZE} \
@@ -590,8 +590,8 @@ echo ""
 EVAL_OUTPUT_DIR="results/${DATASET_NAME}/${TIMESTAMP}"
 uv run python scripts/evaluate-unlearning.py \
     --raw-model "meta-llama/${MODEL}" \
-    --finetuned-model "saves/finetune/${RUN_NAME}_finetuned" \
-    --unlearned-model "saves/unlearn/${RUN_NAME}_unlearned" \
+    --finetuned-model "${FINETUNED_MODEL_PATH}" \
+    --unlearned-model "${UNLEARNED_MODEL_PATH}" \
     --data-dir "${DATA_DIR}/${DATASET_NAME}" \
     --output-dir "${EVAL_OUTPUT_DIR}" \
     --max-samples 100
@@ -644,8 +644,8 @@ cat > "${DATA_DIR}/run_summary.json" << EOF
     "text_dataset_forget": "${DATA_DIR}/${DATASET_NAME}/text_dataset_forget",
     "text_dataset_retain": "${DATA_DIR}/${DATASET_NAME}/text_dataset_retain",
     "raw_model": "meta-llama/${MODEL}",
-    "finetuned_model": "saves/finetune/${RUN_NAME}_finetuned",
-    "unlearned_model": "saves/unlearn/${RUN_NAME}_unlearned",
+    "finetuned_model": "${FINETUNED_MODEL_PATH}",
+    "unlearned_model": "${UNLEARNED_MODEL_PATH}",
     "evaluation_dir": "results/${DATASET_NAME}/${TIMESTAMP}",
     "experiment_config": "${EXPERIMENT_CONFIG_DIR}/${DATASET_NAME}.yaml"
   }
@@ -672,8 +672,8 @@ echo "  Run Name:             ${RUN_NAME}"
 echo ""
 echo "Generated Models:"
 echo "  🧠 Raw Model:         meta-llama/${MODEL}"
-echo "  🎓 Finetuned Model:   saves/finetune/${RUN_NAME}_finetuned"
-echo "  🧹 Unlearned Model:   saves/unlearn/${RUN_NAME}_unlearned"
+echo "  🎓 Finetuned Model:   ${FINETUNED_MODEL_PATH}"
+echo "  🧹 Unlearned Model:   ${UNLEARNED_MODEL_PATH}"
 echo ""
 echo "Generated Artifacts:"
 echo "  📄 Domain JSON:       ${OUTPUT_DIR}/domain.json"
