@@ -11,12 +11,17 @@
 # 5. Evaluates all 3 models: raw, finetuned, unlearned
 #
 # Usage:
-#   bash scripts/domain-unlearn-extended.sh <TOPIC> [MODEL] [TRAINER] [--from-scratch]
+#   bash scripts/domain-unlearn-extended.sh <TOPIC> [MODEL] [TRAINER] [FLAGS]
+#
+# Flags:
+#   --from-scratch     Force regenerate content (ignore checkpoint)
+#   --skip-generation  Skip generation, use existing checkpoint (saves OpenAI costs)
 #
 # Example:
 #   bash scripts/domain-unlearn-extended.sh "Brazil"
 #   bash scripts/domain-unlearn-extended.sh "USA History" Llama-3.2-3B-Instruct
-#   bash scripts/domain-unlearn-extended.sh "Brazil" Llama-3.2-1B-Instruct GradAscent --from-scratch
+#   bash scripts/domain-unlearn-extended.sh "Brazil" --from-scratch
+#   bash scripts/domain-unlearn-extended.sh "Brazil" --skip-generation  # Uses checkpoint, runs ft+unlearn+eval
 #
 # Expected output: ~500-1000 QA pairs (vs ~95 in regular script)
 # Generation time: ~30-60 minutes
@@ -47,12 +52,17 @@ export GEN_UNGROUNDED_QA_MAX_ITEMS=10   # Was 5
 
 # Parse command-line arguments
 FROM_SCRATCH=false
+SKIP_GENERATION=false
 POSITIONAL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --from-scratch)
             FROM_SCRATCH=true
+            shift
+            ;;
+        --skip-generation)
+            SKIP_GENERATION=true
             shift
             ;;
         *)
@@ -179,8 +189,23 @@ CHECKPOINT_DIR=".logs/generations/${DATASET_NAME}"
 CHECKPOINT_FILE="${CHECKPOINT_DIR}/domain.json"
 mkdir -p "${CHECKPOINT_DIR}"
 
+# Skip generation if flag is set
+if [ "$SKIP_GENERATION" = true ]; then
+    echo "⏭️  --skip-generation flag detected: Skipping content generation"
+    if [ -f "${CHECKPOINT_FILE}" ]; then
+        echo "   Using existing checkpoint: ${CHECKPOINT_FILE}"
+        mkdir -p "${OUTPUT_DIR}"
+        cp "${CHECKPOINT_FILE}" "${OUTPUT_DIR}/domain.json"
+        echo "✅ Domain generation skipped (using checkpoint)"
+    else
+        echo "❌ ERROR: No checkpoint found at ${CHECKPOINT_FILE}"
+        echo "   Cannot skip generation without existing data."
+        echo "   Run without --skip-generation first to generate content."
+        exit 1
+    fi
+    echo ""
 # Check if generation already exists (unless --from-scratch is specified)
-if [ -f "${CHECKPOINT_FILE}" ] && [ "$FROM_SCRATCH" = false ]; then
+elif [ -f "${CHECKPOINT_FILE}" ] && [ "$FROM_SCRATCH" = false ]; then
     echo "✅ Found existing generation for '${TOPIC}' in checkpoint"
     echo "   Reusing: ${CHECKPOINT_FILE}"
     echo "   (Use --from-scratch flag to regenerate)"
