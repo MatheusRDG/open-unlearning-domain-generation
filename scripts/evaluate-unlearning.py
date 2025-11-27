@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """
-Evaluate Unlearning Quality
+Evaluate Unlearning Quality - 3 Model Comparison
 
-Generates a CSV comparing original model vs unlearned model responses
+Generates CSVs comparing raw model vs finetuned model vs unlearned model responses
 on the forget and retain datasets.
 
+Outputs:
+    - results/{topic}/{timestamp}/qualitative.csv  - Full responses for manual inspection
+    - results/{topic}/{timestamp}/quantitative.csv - Aggregated metrics
+
 Usage:
+    # Using individual model paths:
     python scripts/evaluate-unlearning.py \
-        --unlearned-model saves/unlearn/brazil_20251127_170950 \
+        --raw-model meta-llama/Llama-3.2-1B-Instruct \
+        --finetuned-model saves/finetune/brazil_20251127_finetuned \
+        --unlearned-model saves/unlearn/brazil_20251127_unlearned \
         --data-dir data/run/20251127_170950/brazil \
-        --output-csv results/brazil_evaluation.csv
+        --output-dir results/brazil/20251127_170950
 
     # Or use the run summary:
     python scripts/evaluate-unlearning.py \
@@ -19,12 +26,15 @@ Usage:
 import argparse
 import json
 import csv
+import re
 from pathlib import Path
 from datetime import datetime
+from collections import Counter
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_from_disk
+import numpy as np
 
 
 def load_model_and_tokenizer(model_path: str, device: str = "cuda"):
@@ -32,7 +42,7 @@ def load_model_and_tokenizer(model_path: str, device: str = "cuda"):
     print(f"Loading model from: {model_path}")
 
     tokenizer = AutoTokenizer.from_pretrained(
-        "meta-llama/Llama-3.2-1B-Instruct",
+        model_path,
         trust_remote_code=True
     )
 
@@ -52,12 +62,8 @@ def load_model_and_tokenizer(model_path: str, device: str = "cuda"):
 
 def generate_response(model, tokenizer, question: str, max_new_tokens: int = 128) -> str:
     """Generate a response from the model."""
-    # Format as chat
-    messages = [
-        {"role": "user", "content": question}
-    ]
+    messages = [{"role": "user", "content": question}]
 
-    # Apply chat template
     prompt = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -70,14 +76,13 @@ def generate_response(model, tokenizer, question: str, max_new_tokens: int = 128
         outputs = model.generate(
             **inputs,
             max_new_tokens=max_new_tokens,
-            do_sample=False,  # Greedy for reproducibility
+            do_sample=False,
             temperature=None,
             top_p=None,
             pad_token_id=tokenizer.pad_token_id,
             eos_token_id=tokenizer.eos_token_id,
         )
 
-    # Decode only the new tokens
     response = tokenizer.decode(
         outputs[0][inputs['input_ids'].shape[1]:],
         skip_special_tokens=True
@@ -86,63 +91,153 @@ def generate_response(model, tokenizer, question: str, max_new_tokens: int = 128
     return response.strip()
 
 
+def tokenize_text(text: str) -> list:
+    """Tokenize text into words, removing punctuation and lowercasing."""
+    text = text.lower()
+    # Remove punctuation and split
+    words = re.findall(r'\b\w+\b', text)
+    return words
+
+
+def calculate_ngrams(tokens: list, n: int) -> Counter:
+    """Calculate n-grams from a list of tokens."""
+    ngrams = []
+    for i in range(len(tokens) - n + 1):
+        ngrams.append(tuple(tokens[i:i+n]))
+    return Counter(ngrams)
+
+
+def calculate_rouge_l(reference: str, hypothesis: str) -> float:
+    """Calculate ROUGE-L score (longest common subsequence)."""
+    ref_tokens = tokenize_text(reference)
+    hyp_tokens = tokenize_text(hypothesis)
+
+    if not ref_tokens or not hyp_tokens:
+        return 0.0
+
+    # LCS calculation
+    m, n = len(ref_tokens), len(hyp_tokens)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if ref_tokens[i-1] == hyp_tokens[j-1]:
+                dp[i][j] = dp[i-1][j-1] + 1
+            else:
+                dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+
+    lcs_length = dp[m][n]
+
+    # F1 score
+    precision = lcs_length / n if n > 0 else 0
+    recall = lcs_length / m if m > 0 else 0
+
+    if precision + recall == 0:
+        return 0.0
+
+    f1 = 2 * precision * recall / (precision + recall)
+    return f1
+
+
 def calculate_metrics(ground_truth: str, prediction: str) -> dict:
-    """Calculate simple evaluation metrics."""
-    gt_lower = ground_truth.lower()
-    pred_lower = prediction.lower()
+    """Calculate comprehensive evaluation metrics."""
+    gt_tokens = tokenize_text(ground_truth)
+    pred_tokens = tokenize_text(prediction)
 
-    # Exact match
-    exact_match = gt_lower == pred_lower
+    gt_set = set(gt_tokens)
+    pred_set = set(pred_tokens)
 
-    # Contains answer
-    contains_answer = gt_lower in pred_lower
+    # Basic metrics
+    exact_match = ground_truth.lower().strip() == prediction.lower().strip()
+    contains_answer = ground_truth.lower() in prediction.lower()
 
-    # Word overlap (simple)
-    gt_words = set(gt_lower.split())
-    pred_words = set(pred_lower.split())
-
-    if len(gt_words) > 0:
-        word_recall = len(gt_words & pred_words) / len(gt_words)
+    # Word-level metrics
+    if len(gt_set) > 0:
+        word_recall = len(gt_set & pred_set) / len(gt_set)
     else:
         word_recall = 0.0
 
-    if len(pred_words) > 0:
-        word_precision = len(gt_words & pred_words) / len(pred_words)
+    if len(pred_set) > 0:
+        word_precision = len(gt_set & pred_set) / len(pred_set)
     else:
         word_precision = 0.0
 
-    # Response length
-    response_length = len(prediction.split())
+    if word_precision + word_recall > 0:
+        word_f1 = 2 * word_precision * word_recall / (word_precision + word_recall)
+    else:
+        word_f1 = 0.0
+
+    # ROUGE-L (captures sequence similarity)
+    rouge_l = calculate_rouge_l(ground_truth, prediction)
+
+    # N-gram overlap (unigram, bigram)
+    gt_unigrams = calculate_ngrams(gt_tokens, 1)
+    pred_unigrams = calculate_ngrams(pred_tokens, 1)
+    gt_bigrams = calculate_ngrams(gt_tokens, 2)
+    pred_bigrams = calculate_ngrams(pred_tokens, 2)
+
+    # Unigram overlap
+    unigram_overlap = sum((gt_unigrams & pred_unigrams).values())
+    unigram_recall = unigram_overlap / sum(gt_unigrams.values()) if gt_unigrams else 0
+    unigram_precision = unigram_overlap / sum(pred_unigrams.values()) if pred_unigrams else 0
+
+    # Bigram overlap
+    bigram_overlap = sum((gt_bigrams & pred_bigrams).values())
+    bigram_recall = bigram_overlap / sum(gt_bigrams.values()) if gt_bigrams else 0
+    bigram_precision = bigram_overlap / sum(pred_bigrams.values()) if pred_bigrams else 0
+
+    # Response characteristics
+    response_length = len(pred_tokens)
+
+    # Check for refusal patterns (common in unlearned models)
+    refusal_patterns = [
+        "i don't know", "i do not know", "i'm not sure", "i am not sure",
+        "i cannot", "i can't", "unable to", "don't have information",
+        "no information", "not available", "cannot provide", "sorry"
+    ]
+    pred_lower = prediction.lower()
+    is_refusal = any(pattern in pred_lower for pattern in refusal_patterns)
 
     return {
         "exact_match": exact_match,
         "contains_answer": contains_answer,
-        "word_recall": round(word_recall, 4),
         "word_precision": round(word_precision, 4),
-        "response_length": response_length
+        "word_recall": round(word_recall, 4),
+        "word_f1": round(word_f1, 4),
+        "rouge_l": round(rouge_l, 4),
+        "unigram_recall": round(unigram_recall, 4),
+        "bigram_recall": round(bigram_recall, 4),
+        "response_length": response_length,
+        "is_refusal": is_refusal
     }
 
 
 def evaluate_models(
-    original_model_path: str,
+    raw_model_path: str,
+    finetuned_model_path: str,
     unlearned_model_path: str,
     forget_dataset_path: str,
     retain_dataset_path: str,
-    output_csv: str,
+    output_dir: str,
     max_samples: int = None,
     device: str = "cuda"
 ):
-    """Run evaluation comparing original and unlearned models."""
+    """Run evaluation comparing raw, finetuned, and unlearned models."""
 
     print("=" * 80)
-    print("Unlearning Evaluation")
+    print("Unlearning Evaluation - 3 Model Comparison")
     print("=" * 80)
-    print(f"Original Model:  {original_model_path}")
+    print(f"Raw Model:       {raw_model_path}")
+    print(f"Finetuned Model: {finetuned_model_path}")
     print(f"Unlearned Model: {unlearned_model_path}")
     print(f"Forget Dataset:  {forget_dataset_path}")
     print(f"Retain Dataset:  {retain_dataset_path}")
-    print(f"Output CSV:      {output_csv}")
+    print(f"Output Dir:      {output_dir}")
     print("=" * 80)
+
+    # Create output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
 
     # Load datasets
     print("\nLoading datasets...")
@@ -158,181 +253,268 @@ def evaluate_models(
         retain_dataset = retain_dataset.select(range(min(max_samples, len(retain_dataset))))
         print(f"  Limited to: {max_samples} samples each")
 
-    # Load models
-    print("\nLoading original model...")
-    original_model, tokenizer = load_model_and_tokenizer(original_model_path, device)
+    # Collect all samples
+    all_samples = []
+    for sample in forget_dataset:
+        all_samples.append({"dataset": "forget", "question": sample["question"], "answer": sample["answer"]})
+    for sample in retain_dataset:
+        all_samples.append({"dataset": "retain", "question": sample["question"], "answer": sample["answer"]})
 
-    print("\nLoading unlearned model...")
-    unlearned_model, _ = load_model_and_tokenizer(unlearned_model_path, device)
-
-    # Prepare results
+    # Initialize results
     results = []
-
-    # Evaluate forget set
-    print("\n" + "=" * 80)
-    print("Evaluating FORGET set (model should NOT know these)")
-    print("=" * 80)
-
-    for i, sample in enumerate(forget_dataset):
-        question = sample["question"]
-        ground_truth = sample["answer"]
-
-        print(f"\n[{i+1}/{len(forget_dataset)}] {question[:60]}...")
-
-        # Generate responses
-        original_response = generate_response(original_model, tokenizer, question)
-        unlearned_response = generate_response(unlearned_model, tokenizer, question)
-
-        # Calculate metrics
-        original_metrics = calculate_metrics(ground_truth, original_response)
-        unlearned_metrics = calculate_metrics(ground_truth, unlearned_response)
-
+    for sample in all_samples:
         results.append({
-            "dataset": "forget",
-            "question": question,
-            "ground_truth": ground_truth,
-            "original_response": original_response,
-            "unlearned_response": unlearned_response,
-            "original_exact_match": original_metrics["exact_match"],
-            "original_contains_answer": original_metrics["contains_answer"],
-            "original_word_recall": original_metrics["word_recall"],
-            "unlearned_exact_match": unlearned_metrics["exact_match"],
-            "unlearned_contains_answer": unlearned_metrics["contains_answer"],
-            "unlearned_word_recall": unlearned_metrics["word_recall"],
-            "unlearned_response_length": unlearned_metrics["response_length"],
+            "dataset": sample["dataset"],
+            "question": sample["question"],
+            "ground_truth": sample["answer"],
+            "raw_response": None,
+            "finetuned_response": None,
+            "unlearned_response": None,
         })
 
-        # Print preview
-        print(f"  Ground Truth: {ground_truth[:50]}...")
-        print(f"  Original:     {original_response[:50]}...")
-        print(f"  Unlearned:    {unlearned_response[:50]}...")
+    # Process with each model (one at a time to save memory)
+    models_to_evaluate = [
+        ("raw", raw_model_path),
+        ("finetuned", finetuned_model_path),
+        ("unlearned", unlearned_model_path),
+    ]
 
-    # Evaluate retain set
+    for model_name, model_path in models_to_evaluate:
+        print(f"\n{'=' * 80}")
+        print(f"Loading and evaluating {model_name.upper()} model...")
+        print("=" * 80)
+
+        model, tokenizer = load_model_and_tokenizer(model_path, device)
+
+        for i, result in enumerate(results):
+            print(f"[{i+1}/{len(results)}] {result['question'][:50]}...")
+            result[f"{model_name}_response"] = generate_response(model, tokenizer, result["question"])
+
+        del model
+        torch.cuda.empty_cache()
+
+    # Calculate metrics for all results
     print("\n" + "=" * 80)
-    print("Evaluating RETAIN set (model SHOULD still know these)")
+    print("Calculating metrics...")
     print("=" * 80)
 
-    for i, sample in enumerate(retain_dataset):
-        question = sample["question"]
-        ground_truth = sample["answer"]
+    qualitative_results = []
+    detailed_metrics = []
 
-        print(f"\n[{i+1}/{len(retain_dataset)}] {question[:60]}...")
+    for result in results:
+        raw_metrics = calculate_metrics(result["ground_truth"], result["raw_response"])
+        finetuned_metrics = calculate_metrics(result["ground_truth"], result["finetuned_response"])
+        unlearned_metrics = calculate_metrics(result["ground_truth"], result["unlearned_response"])
 
-        # Generate responses
-        original_response = generate_response(original_model, tokenizer, question)
-        unlearned_response = generate_response(unlearned_model, tokenizer, question)
-
-        # Calculate metrics
-        original_metrics = calculate_metrics(ground_truth, original_response)
-        unlearned_metrics = calculate_metrics(ground_truth, unlearned_response)
-
-        results.append({
-            "dataset": "retain",
-            "question": question,
-            "ground_truth": ground_truth,
-            "original_response": original_response,
-            "unlearned_response": unlearned_response,
-            "original_exact_match": original_metrics["exact_match"],
-            "original_contains_answer": original_metrics["contains_answer"],
-            "original_word_recall": original_metrics["word_recall"],
-            "unlearned_exact_match": unlearned_metrics["exact_match"],
-            "unlearned_contains_answer": unlearned_metrics["contains_answer"],
-            "unlearned_word_recall": unlearned_metrics["word_recall"],
-            "unlearned_response_length": unlearned_metrics["response_length"],
+        # Qualitative CSV (full responses)
+        qualitative_results.append({
+            "dataset": result["dataset"],
+            "question": result["question"],
+            "ground_truth": result["ground_truth"],
+            "raw_response": result["raw_response"],
+            "finetuned_response": result["finetuned_response"],
+            "unlearned_response": result["unlearned_response"],
         })
 
-        # Print preview
-        print(f"  Ground Truth: {ground_truth[:50]}...")
-        print(f"  Original:     {original_response[:50]}...")
-        print(f"  Unlearned:    {unlearned_response[:50]}...")
+        # Detailed metrics per sample
+        detailed_metrics.append({
+            "dataset": result["dataset"],
+            "question": result["question"][:100],
+            # Raw metrics
+            "raw_contains_answer": raw_metrics["contains_answer"],
+            "raw_word_f1": raw_metrics["word_f1"],
+            "raw_rouge_l": raw_metrics["rouge_l"],
+            "raw_is_refusal": raw_metrics["is_refusal"],
+            # Finetuned metrics
+            "finetuned_contains_answer": finetuned_metrics["contains_answer"],
+            "finetuned_word_f1": finetuned_metrics["word_f1"],
+            "finetuned_rouge_l": finetuned_metrics["rouge_l"],
+            "finetuned_is_refusal": finetuned_metrics["is_refusal"],
+            # Unlearned metrics
+            "unlearned_contains_answer": unlearned_metrics["contains_answer"],
+            "unlearned_word_f1": unlearned_metrics["word_f1"],
+            "unlearned_rouge_l": unlearned_metrics["rouge_l"],
+            "unlearned_is_refusal": unlearned_metrics["is_refusal"],
+        })
 
-    # Save CSV
-    output_path = Path(output_csv)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(output_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=results[0].keys())
+    # Save qualitative CSV
+    qualitative_csv = output_path / "qualitative.csv"
+    with open(qualitative_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=qualitative_results[0].keys())
         writer.writeheader()
-        writer.writerows(results)
+        writer.writerows(qualitative_results)
+    print(f"\nQualitative results saved to: {qualitative_csv}")
 
-    print(f"\n✅ Results saved to: {output_csv}")
+    # Calculate aggregated metrics
+    forget_metrics = [m for m in detailed_metrics if m["dataset"] == "forget"]
+    retain_metrics = [m for m in detailed_metrics if m["dataset"] == "retain"]
 
-    # Print summary statistics
+    def avg(lst):
+        return sum(lst) / len(lst) if lst else 0
+
+    def rate(lst):
+        return sum(lst) / len(lst) if lst else 0
+
+    quantitative_summary = {
+        "metric": [],
+        "raw_forget": [],
+        "finetuned_forget": [],
+        "unlearned_forget": [],
+        "raw_retain": [],
+        "finetuned_retain": [],
+        "unlearned_retain": [],
+    }
+
+    # Contains Answer Rate
+    quantitative_summary["metric"].append("contains_answer_rate")
+    quantitative_summary["raw_forget"].append(rate([m["raw_contains_answer"] for m in forget_metrics]))
+    quantitative_summary["finetuned_forget"].append(rate([m["finetuned_contains_answer"] for m in forget_metrics]))
+    quantitative_summary["unlearned_forget"].append(rate([m["unlearned_contains_answer"] for m in forget_metrics]))
+    quantitative_summary["raw_retain"].append(rate([m["raw_contains_answer"] for m in retain_metrics]))
+    quantitative_summary["finetuned_retain"].append(rate([m["finetuned_contains_answer"] for m in retain_metrics]))
+    quantitative_summary["unlearned_retain"].append(rate([m["unlearned_contains_answer"] for m in retain_metrics]))
+
+    # Word F1
+    quantitative_summary["metric"].append("word_f1")
+    quantitative_summary["raw_forget"].append(avg([m["raw_word_f1"] for m in forget_metrics]))
+    quantitative_summary["finetuned_forget"].append(avg([m["finetuned_word_f1"] for m in forget_metrics]))
+    quantitative_summary["unlearned_forget"].append(avg([m["unlearned_word_f1"] for m in forget_metrics]))
+    quantitative_summary["raw_retain"].append(avg([m["raw_word_f1"] for m in retain_metrics]))
+    quantitative_summary["finetuned_retain"].append(avg([m["finetuned_word_f1"] for m in retain_metrics]))
+    quantitative_summary["unlearned_retain"].append(avg([m["unlearned_word_f1"] for m in retain_metrics]))
+
+    # ROUGE-L
+    quantitative_summary["metric"].append("rouge_l")
+    quantitative_summary["raw_forget"].append(avg([m["raw_rouge_l"] for m in forget_metrics]))
+    quantitative_summary["finetuned_forget"].append(avg([m["finetuned_rouge_l"] for m in forget_metrics]))
+    quantitative_summary["unlearned_forget"].append(avg([m["unlearned_rouge_l"] for m in forget_metrics]))
+    quantitative_summary["raw_retain"].append(avg([m["raw_rouge_l"] for m in retain_metrics]))
+    quantitative_summary["finetuned_retain"].append(avg([m["finetuned_rouge_l"] for m in retain_metrics]))
+    quantitative_summary["unlearned_retain"].append(avg([m["unlearned_rouge_l"] for m in retain_metrics]))
+
+    # Refusal Rate
+    quantitative_summary["metric"].append("refusal_rate")
+    quantitative_summary["raw_forget"].append(rate([m["raw_is_refusal"] for m in forget_metrics]))
+    quantitative_summary["finetuned_forget"].append(rate([m["finetuned_is_refusal"] for m in forget_metrics]))
+    quantitative_summary["unlearned_forget"].append(rate([m["unlearned_is_refusal"] for m in forget_metrics]))
+    quantitative_summary["raw_retain"].append(rate([m["raw_is_refusal"] for m in retain_metrics]))
+    quantitative_summary["finetuned_retain"].append(rate([m["finetuned_is_refusal"] for m in retain_metrics]))
+    quantitative_summary["unlearned_retain"].append(rate([m["unlearned_is_refusal"] for m in retain_metrics]))
+
+    # Add computed unlearning metrics
+    # Forget Efficacy: How much knowledge was removed (finetuned - unlearned on forget set)
+    finetuned_forget_score = quantitative_summary["finetuned_forget"][0]  # contains_answer_rate
+    unlearned_forget_score = quantitative_summary["unlearned_forget"][0]
+    forget_efficacy = finetuned_forget_score - unlearned_forget_score
+
+    # Retain Preservation: How much knowledge was preserved (unlearned / finetuned on retain set)
+    finetuned_retain_score = quantitative_summary["finetuned_retain"][0]
+    unlearned_retain_score = quantitative_summary["unlearned_retain"][0]
+    retain_preservation = unlearned_retain_score / max(finetuned_retain_score, 0.01)
+
+    # Learning Gain: Did fine-tuning work? (finetuned - raw on forget set)
+    raw_forget_score = quantitative_summary["raw_forget"][0]
+    learning_gain = finetuned_forget_score - raw_forget_score
+
+    # Add these as separate metrics
+    quantitative_summary["metric"].append("---UNLEARNING_METRICS---")
+    quantitative_summary["raw_forget"].append("")
+    quantitative_summary["finetuned_forget"].append("")
+    quantitative_summary["unlearned_forget"].append("")
+    quantitative_summary["raw_retain"].append("")
+    quantitative_summary["finetuned_retain"].append("")
+    quantitative_summary["unlearned_retain"].append("")
+
+    quantitative_summary["metric"].append("forget_efficacy")
+    quantitative_summary["raw_forget"].append("")
+    quantitative_summary["finetuned_forget"].append("")
+    quantitative_summary["unlearned_forget"].append(forget_efficacy)
+    quantitative_summary["raw_retain"].append("")
+    quantitative_summary["finetuned_retain"].append("")
+    quantitative_summary["unlearned_retain"].append("")
+
+    quantitative_summary["metric"].append("retain_preservation")
+    quantitative_summary["raw_forget"].append("")
+    quantitative_summary["finetuned_forget"].append("")
+    quantitative_summary["unlearned_forget"].append("")
+    quantitative_summary["raw_retain"].append("")
+    quantitative_summary["finetuned_retain"].append("")
+    quantitative_summary["unlearned_retain"].append(retain_preservation)
+
+    quantitative_summary["metric"].append("learning_gain")
+    quantitative_summary["raw_forget"].append("")
+    quantitative_summary["finetuned_forget"].append(learning_gain)
+    quantitative_summary["unlearned_forget"].append("")
+    quantitative_summary["raw_retain"].append("")
+    quantitative_summary["finetuned_retain"].append("")
+    quantitative_summary["unlearned_retain"].append("")
+
+    # Save quantitative CSV
+    quantitative_csv = output_path / "quantitative.csv"
+    with open(quantitative_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["metric", "raw_forget", "finetuned_forget", "unlearned_forget",
+                        "raw_retain", "finetuned_retain", "unlearned_retain"])
+        for i, metric in enumerate(quantitative_summary["metric"]):
+            row = [metric]
+            for col in ["raw_forget", "finetuned_forget", "unlearned_forget",
+                       "raw_retain", "finetuned_retain", "unlearned_retain"]:
+                val = quantitative_summary[col][i]
+                if isinstance(val, float):
+                    row.append(f"{val:.4f}")
+                else:
+                    row.append(val)
+            writer.writerow(row)
+
+    print(f"Quantitative results saved to: {quantitative_csv}")
+
+    # Print summary
     print("\n" + "=" * 80)
-    print("SUMMARY STATISTICS")
+    print("SUMMARY")
     print("=" * 80)
-
-    forget_results = [r for r in results if r["dataset"] == "forget"]
-    retain_results = [r for r in results if r["dataset"] == "retain"]
 
     print("\nFORGET SET (lower is better for unlearned model):")
-    print(f"  Original model - Contains Answer: {sum(r['original_contains_answer'] for r in forget_results)}/{len(forget_results)}")
-    print(f"  Unlearned model - Contains Answer: {sum(r['unlearned_contains_answer'] for r in forget_results)}/{len(forget_results)}")
-    print(f"  Original model - Avg Word Recall: {sum(r['original_word_recall'] for r in forget_results)/len(forget_results):.4f}")
-    print(f"  Unlearned model - Avg Word Recall: {sum(r['unlearned_word_recall'] for r in forget_results)/len(forget_results):.4f}")
+    print(f"  Contains Answer Rate:")
+    print(f"    Raw:       {raw_forget_score:.2%}")
+    print(f"    Finetuned: {finetuned_forget_score:.2%}")
+    print(f"    Unlearned: {unlearned_forget_score:.2%}")
 
     print("\nRETAIN SET (higher is better for unlearned model):")
-    print(f"  Original model - Contains Answer: {sum(r['original_contains_answer'] for r in retain_results)}/{len(retain_results)}")
-    print(f"  Unlearned model - Contains Answer: {sum(r['unlearned_contains_answer'] for r in retain_results)}/{len(retain_results)}")
-    print(f"  Original model - Avg Word Recall: {sum(r['original_word_recall'] for r in retain_results)/len(retain_results):.4f}")
-    print(f"  Unlearned model - Avg Word Recall: {sum(r['unlearned_word_recall'] for r in retain_results)/len(retain_results):.4f}")
+    print(f"  Contains Answer Rate:")
+    print(f"    Raw:       {quantitative_summary['raw_retain'][0]:.2%}")
+    print(f"    Finetuned: {finetuned_retain_score:.2%}")
+    print(f"    Unlearned: {unlearned_retain_score:.2%}")
 
-    # Calculate unlearning score
-    forget_reduction = (
-        sum(r['original_contains_answer'] for r in forget_results) -
-        sum(r['unlearned_contains_answer'] for r in forget_results)
-    ) / max(len(forget_results), 1)
+    print("\n" + "=" * 80)
+    print("UNLEARNING EFFECTIVENESS")
+    print("=" * 80)
+    print(f"  Learning Gain:       {learning_gain:+.2%} (finetuned vs raw on forget)")
+    print(f"  Forget Efficacy:     {forget_efficacy:+.2%} (finetuned vs unlearned on forget)")
+    print(f"  Retain Preservation: {retain_preservation:.2%} (unlearned / finetuned on retain)")
+    print("=" * 80)
 
-    retain_preservation = sum(r['unlearned_contains_answer'] for r in retain_results) / max(len(retain_results), 1)
+    # Save detailed per-sample metrics
+    detailed_csv = output_path / "detailed_metrics.csv"
+    with open(detailed_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=detailed_metrics[0].keys())
+        writer.writeheader()
+        writer.writerows(detailed_metrics)
+    print(f"\nDetailed per-sample metrics saved to: {detailed_csv}")
 
-    print(f"\n📊 UNLEARNING METRICS:")
-    print(f"  Forget Reduction:    {forget_reduction:.2%} (higher = better unlearning)")
-    print(f"  Retain Preservation: {retain_preservation:.2%} (higher = better utility)")
-
-    return results
+    return qualitative_results, quantitative_summary
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate unlearning quality")
+    parser = argparse.ArgumentParser(description="Evaluate unlearning quality with 3 model comparison")
 
-    parser.add_argument(
-        "--run-summary",
-        type=str,
-        help="Path to run_summary.json (auto-fills other paths)"
-    )
-    parser.add_argument(
-        "--original-model",
-        type=str,
-        default="meta-llama/Llama-3.2-1B-Instruct",
-        help="Path to original model"
-    )
-    parser.add_argument(
-        "--unlearned-model",
-        type=str,
-        help="Path to unlearned model checkpoint"
-    )
-    parser.add_argument(
-        "--data-dir",
-        type=str,
-        help="Path to data directory containing qa_dataset_forget and qa_dataset_retain"
-    )
-    parser.add_argument(
-        "--output-csv",
-        type=str,
-        help="Path to output CSV file"
-    )
-    parser.add_argument(
-        "--max-samples",
-        type=int,
-        default=None,
-        help="Maximum number of samples to evaluate per dataset"
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda",
-        help="Device to use (cuda or cpu)"
-    )
+    parser.add_argument("--run-summary", type=str, help="Path to run_summary.json (auto-fills other paths)")
+    parser.add_argument("--raw-model", type=str, default="meta-llama/Llama-3.2-1B-Instruct", help="Path to raw/base model")
+    parser.add_argument("--finetuned-model", type=str, help="Path to finetuned model checkpoint")
+    parser.add_argument("--unlearned-model", type=str, help="Path to unlearned model checkpoint")
+    parser.add_argument("--data-dir", type=str, help="Path to data directory containing qa_dataset_forget and qa_dataset_retain")
+    parser.add_argument("--output-dir", type=str, help="Path to output directory for CSV files")
+    parser.add_argument("--max-samples", type=int, default=None, help="Maximum number of samples to evaluate per dataset")
+    parser.add_argument("--device", type=str, default="cuda", help="Device to use (cuda or cpu)")
 
     args = parser.parse_args()
 
@@ -341,13 +523,18 @@ def main():
         with open(args.run_summary) as f:
             summary = json.load(f)
 
-        args.unlearned_model = summary["paths"]["model_checkpoint"]
+        args.raw_model = summary["paths"].get("raw_model", args.raw_model)
+        args.finetuned_model = summary["paths"]["finetuned_model"]
+        args.unlearned_model = summary["paths"]["unlearned_model"]
         args.data_dir = Path(summary["paths"]["qa_dataset_forget"]).parent
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        args.output_csv = args.output_csv or f"results/{summary['dataset_name']}_evaluation_{timestamp}.csv"
+        topic = summary["dataset_name"]
+        timestamp = summary["timestamp"]
+        args.output_dir = args.output_dir or f"results/{topic}/{timestamp}"
 
     # Validate arguments
+    if not args.finetuned_model:
+        parser.error("--finetuned-model or --run-summary is required")
     if not args.unlearned_model:
         parser.error("--unlearned-model or --run-summary is required")
     if not args.data_dir:
@@ -357,14 +544,15 @@ def main():
     forget_path = str(data_dir / "qa_dataset_forget")
     retain_path = str(data_dir / "qa_dataset_retain")
 
-    output_csv = args.output_csv or f"results/evaluation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    output_dir = args.output_dir or f"results/evaluation_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     evaluate_models(
-        original_model_path=args.original_model,
+        raw_model_path=args.raw_model,
+        finetuned_model_path=args.finetuned_model,
         unlearned_model_path=args.unlearned_model,
         forget_dataset_path=forget_path,
         retain_dataset_path=retain_path,
-        output_csv=output_csv,
+        output_dir=output_dir,
         max_samples=args.max_samples,
         device=args.device
     )

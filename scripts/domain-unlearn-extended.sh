@@ -6,7 +6,9 @@
 # This script performs end-to-end domain unlearning with LARGE dataset generation:
 # 1. Generates MORE domain content (5-10 topics, 15-25 QA pairs per item)
 # 2. Converts the generated content to HuggingFace dataset format
-# 3. Runs full training (20 epochs) on a specified model
+# 3. Fine-tunes the model on the domain data (creates "finetuned" model)
+# 4. Runs unlearning on the finetuned model (creates "unlearned" model)
+# 5. Evaluates all 3 models: raw, finetuned, unlearned
 #
 # Usage:
 #   bash scripts/domain-unlearn-extended.sh <TOPIC> [MODEL] [TRAINER] [--from-scratch]
@@ -18,7 +20,7 @@
 #
 # Expected output: ~500-1000 QA pairs (vs ~95 in regular script)
 # Generation time: ~30-60 minutes
-# Training time: ~3-4 hours (20 epochs)
+# Training time: ~3-4 hours (fine-tuning) + ~2-3 hours (unlearning)
 ##############################################################################
 
 set -e  # Exit on error
@@ -63,12 +65,20 @@ DATA_DIR="data/run/${TIMESTAMP}"
 DATASET_NAME=$(echo "${TOPIC}" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
 RUN_NAME="${DATASET_NAME}_${TIMESTAMP}"
 
-# Training hyperparameters (Full training configuration)
-PER_DEVICE_BATCH_SIZE=4
-GRADIENT_ACCUMULATION_STEPS=8  # Effective batch size = 32
-NUM_EPOCHS=20  # Full training overnight
-LEARNING_RATE=1e-5
-WARMUP_EPOCHS=2.0
+# Fine-tuning hyperparameters
+FINETUNE_EPOCHS=10
+FINETUNE_LEARNING_RATE=2e-5
+FINETUNE_BATCH_SIZE=4
+FINETUNE_GRADIENT_ACCUMULATION=4  # Effective batch size = 16
+
+# Unlearning hyperparameters
+UNLEARN_EPOCHS=10
+UNLEARN_LEARNING_RATE=1e-5
+UNLEARN_BATCH_SIZE=4
+UNLEARN_GRADIENT_ACCUMULATION=8  # Effective batch size = 32
+
+# Common hyperparameters
+WARMUP_EPOCHS=1.0
 WEIGHT_DECAY=0.01
 
 # Create directories
@@ -76,7 +86,7 @@ mkdir -p "${DATA_DIR}"
 mkdir -p "${OUTPUT_DIR}"
 
 echo "================================================================================================"
-echo "Domain Unlearning Pipeline - EXTENDED GENERATION + FULL TRAINING"
+echo "Domain Unlearning Pipeline - EXTENDED GENERATION"
 echo "================================================================================================"
 echo "GENERATION SETTINGS (EXTENDED):"
 echo "  Topics:             ${GEN_TOPICS_MIN_ITEMS}-${GEN_TOPICS_MAX_ITEMS} (was 2-5)"
@@ -96,15 +106,19 @@ echo "Output Directory:     ${OUTPUT_DIR}"
 echo "Data Directory:       ${DATA_DIR}"
 echo "Timestamp:            ${TIMESTAMP}"
 echo ""
-echo "Training Configuration:"
-echo "  Epochs:             ${NUM_EPOCHS}"
-echo "  Batch Size:         ${PER_DEVICE_BATCH_SIZE}"
-echo "  Gradient Accum:     ${GRADIENT_ACCUMULATION_STEPS}"
-echo "  Effective Batch:    $((PER_DEVICE_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
-echo "  Learning Rate:      ${LEARNING_RATE}"
-echo "  Warmup Epochs:      ${WARMUP_EPOCHS}"
-echo "  Weight Decay:       ${WEIGHT_DECAY}"
-echo "  Save Every:         0.5 epochs (keep last 5)"
+echo "Fine-tuning Configuration:"
+echo "  Epochs:             ${FINETUNE_EPOCHS}"
+echo "  Batch Size:         ${FINETUNE_BATCH_SIZE}"
+echo "  Gradient Accum:     ${FINETUNE_GRADIENT_ACCUMULATION}"
+echo "  Effective Batch:    $((FINETUNE_BATCH_SIZE * FINETUNE_GRADIENT_ACCUMULATION))"
+echo "  Learning Rate:      ${FINETUNE_LEARNING_RATE}"
+echo ""
+echo "Unlearning Configuration:"
+echo "  Epochs:             ${UNLEARN_EPOCHS}"
+echo "  Batch Size:         ${UNLEARN_BATCH_SIZE}"
+echo "  Gradient Accum:     ${UNLEARN_GRADIENT_ACCUMULATION}"
+echo "  Effective Batch:    $((UNLEARN_BATCH_SIZE * UNLEARN_GRADIENT_ACCUMULATION))"
+echo "  Learning Rate:      ${UNLEARN_LEARNING_RATE}"
 echo "================================================================================================"
 echo ""
 
@@ -415,12 +429,14 @@ fi
 echo ""
 
 ##############################################################################
-# Step 6: Run Unlearning
+# Step 6: Fine-tune Model on Domain Data
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 6: Running Unlearning with ${TRAINER}"
+echo "Step 6: Fine-tuning ${MODEL} on Domain Data"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "This creates a model that KNOWS the domain content (finetuned model)"
 echo ""
 
 # Force single GPU to avoid distributed training issues
@@ -433,39 +449,133 @@ echo "Master Port: ${MASTER_PORT}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo ""
 
-# Run unlearning (Full Training Configuration)
-uv run python src/train.py --config-name=unlearn.yaml \
-    experiment=unlearn/domain/${DATASET_NAME} \
-    task_name=${RUN_NAME} \
-    trainer.args.num_train_epochs=${NUM_EPOCHS} \
-    trainer.args.learning_rate=${LEARNING_RATE} \
-    trainer.args.per_device_train_batch_size=${PER_DEVICE_BATCH_SIZE} \
-    trainer.args.gradient_accumulation_steps=${GRADIENT_ACCUMULATION_STEPS} \
+# Define model paths
+FINETUNED_MODEL_PATH="saves/finetune/${RUN_NAME}_finetuned"
+UNLEARNED_MODEL_PATH="saves/unlearn/${RUN_NAME}_unlearned"
+
+# Create finetune config for training on forget data (to teach the model the domain)
+FINETUNE_CONFIG_DIR="configs/experiment/finetune/domain"
+mkdir -p "${FINETUNE_CONFIG_DIR}"
+
+cat > "${FINETUNE_CONFIG_DIR}/${DATASET_NAME}.yaml" << EOF
+# @package _global_
+
+# Domain Fine-tuning Experiment: ${TOPIC}
+# Generated: ${TIMESTAMP}
+# Purpose: Teach the model domain-specific knowledge before unlearning
+
+defaults:
+  - override /model: ${MODEL}
+  - override /trainer: finetune
+  - override /collator: DataCollatorForSupervisedDataset
+  - override /data: train
+  - override /data/datasets@data.train: DOMAIN_${DATASET_NAME}_forget
+  - _self_
+
+# Task name
+task_name: ${RUN_NAME}_finetuned
+
+# Evaluation configuration (optional)
+eval: null
+EOF
+
+echo "Created: ${FINETUNE_CONFIG_DIR}/${DATASET_NAME}.yaml"
+
+# Run fine-tuning on the FORGET data (teaching the model the domain)
+uv run python src/train.py --config-name=train.yaml \
+    experiment=finetune/domain/${DATASET_NAME} \
+    task_name=${RUN_NAME}_finetuned \
+    trainer.args.num_train_epochs=${FINETUNE_EPOCHS} \
+    trainer.args.learning_rate=${FINETUNE_LEARNING_RATE} \
+    trainer.args.per_device_train_batch_size=${FINETUNE_BATCH_SIZE} \
+    trainer.args.gradient_accumulation_steps=${FINETUNE_GRADIENT_ACCUMULATION} \
     +trainer.args.warmup_epochs=${WARMUP_EPOCHS} \
     trainer.args.weight_decay=${WEIGHT_DECAY} \
-    trainer.args.save_strategy=steps \
-    +trainer.args.save_steps=0.5 \
-    +trainer.args.save_total_limit=5 \
+    trainer.args.save_strategy=epoch \
+    +trainer.args.save_total_limit=3 \
     trainer.args.eval_strategy=no \
     trainer.args.logging_steps=1 \
     +trainer.args.logging_first_step=true \
     +trainer.args.dataloader_num_workers=0 \
     trainer.args.ddp_find_unused_parameters=false \
     trainer.args.gradient_checkpointing=true \
-    +trainer.args.load_best_model_at_end=false \
-    +trainer.args.metric_for_best_model=loss \
+    trainer.args.report_to=tensorboard
+
+echo ""
+echo "✅ Fine-tuning complete!"
+echo "   Finetuned model saved to: saves/finetune/${RUN_NAME}_finetuned"
+echo ""
+
+##############################################################################
+# Step 7: Run Unlearning on Finetuned Model
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 7: Running Unlearning with ${TRAINER} on Finetuned Model"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "This creates a model that should FORGET the domain content (unlearned model)"
+echo ""
+
+# Run unlearning starting from the FINETUNED model
+uv run python src/train.py --config-name=unlearn.yaml \
+    experiment=unlearn/domain/${DATASET_NAME} \
+    task_name=${RUN_NAME}_unlearned \
+    model.model_args.pretrained_model_name_or_path=saves/finetune/${RUN_NAME}_finetuned \
+    trainer.args.num_train_epochs=${UNLEARN_EPOCHS} \
+    trainer.args.learning_rate=${UNLEARN_LEARNING_RATE} \
+    trainer.args.per_device_train_batch_size=${UNLEARN_BATCH_SIZE} \
+    trainer.args.gradient_accumulation_steps=${UNLEARN_GRADIENT_ACCUMULATION} \
+    +trainer.args.warmup_epochs=${WARMUP_EPOCHS} \
+    trainer.args.weight_decay=${WEIGHT_DECAY} \
+    trainer.args.save_strategy=epoch \
+    +trainer.args.save_total_limit=3 \
+    trainer.args.eval_strategy=no \
+    trainer.args.logging_steps=1 \
+    +trainer.args.logging_first_step=true \
+    +trainer.args.dataloader_num_workers=0 \
+    trainer.args.ddp_find_unused_parameters=false \
+    trainer.args.gradient_checkpointing=true \
     trainer.args.report_to=tensorboard
 
 echo ""
 echo "✅ Unlearning complete!"
+echo "   Unlearned model saved to: saves/unlearn/${RUN_NAME}_unlearned"
 echo ""
 
 ##############################################################################
-# Step 7: Save Run Summary
+# Step 8: Run Evaluation (Compare all 3 models)
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 7: Saving Run Summary"
+echo "Step 8: Evaluating All Models (Raw vs Finetuned vs Unlearned)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Run evaluation comparing all 3 models
+EVAL_OUTPUT_DIR="results/${DATASET_NAME}/${TIMESTAMP}"
+uv run python scripts/evaluate-unlearning.py \
+    --raw-model "meta-llama/${MODEL}" \
+    --finetuned-model "saves/finetune/${RUN_NAME}_finetuned" \
+    --unlearned-model "saves/unlearn/${RUN_NAME}_unlearned" \
+    --data-dir "${DATA_DIR}/${DATASET_NAME}" \
+    --output-dir "${EVAL_OUTPUT_DIR}" \
+    --max-samples 100
+
+echo ""
+echo "✅ Evaluation complete!"
+echo "   Results saved to: ${EVAL_OUTPUT_DIR}/"
+echo "     - qualitative.csv (full responses)"
+echo "     - quantitative.csv (aggregated metrics)"
+echo "     - detailed_metrics.csv (per-sample metrics)"
+echo ""
+
+##############################################################################
+# Step 9: Save Run Summary
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 9: Saving Run Summary"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -479,10 +589,18 @@ cat > "${DATA_DIR}/run_summary.json" << EOF
   "model": "${MODEL}",
   "trainer": "${TRAINER}",
   "hyperparameters": {
-    "num_epochs": ${NUM_EPOCHS},
-    "learning_rate": ${LEARNING_RATE},
-    "per_device_batch_size": ${PER_DEVICE_BATCH_SIZE},
-    "gradient_accumulation_steps": ${GRADIENT_ACCUMULATION_STEPS}
+    "finetune": {
+      "epochs": ${FINETUNE_EPOCHS},
+      "learning_rate": ${FINETUNE_LEARNING_RATE},
+      "batch_size": ${FINETUNE_BATCH_SIZE},
+      "gradient_accumulation": ${FINETUNE_GRADIENT_ACCUMULATION}
+    },
+    "unlearn": {
+      "epochs": ${UNLEARN_EPOCHS},
+      "learning_rate": ${UNLEARN_LEARNING_RATE},
+      "batch_size": ${UNLEARN_BATCH_SIZE},
+      "gradient_accumulation": ${UNLEARN_GRADIENT_ACCUMULATION}
+    }
   },
   "paths": {
     "domain_json": "${OUTPUT_DIR}/domain.json",
@@ -491,7 +609,10 @@ cat > "${DATA_DIR}/run_summary.json" << EOF
     "qa_dataset_retain": "${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain",
     "text_dataset_forget": "${DATA_DIR}/${DATASET_NAME}/text_dataset_forget",
     "text_dataset_retain": "${DATA_DIR}/${DATASET_NAME}/text_dataset_retain",
-    "model_checkpoint": "saves/unlearn/${RUN_NAME}",
+    "raw_model": "meta-llama/${MODEL}",
+    "finetuned_model": "saves/finetune/${RUN_NAME}_finetuned",
+    "unlearned_model": "saves/unlearn/${RUN_NAME}_unlearned",
+    "evaluation_dir": "results/${DATASET_NAME}/${TIMESTAMP}",
     "experiment_config": "${EXPERIMENT_CONFIG_DIR}/${DATASET_NAME}.yaml"
   }
 }
@@ -515,24 +636,22 @@ echo "  Model:                ${MODEL}"
 echo "  Trainer:              ${TRAINER}"
 echo "  Run Name:             ${RUN_NAME}"
 echo ""
+echo "Generated Models:"
+echo "  🧠 Raw Model:         meta-llama/${MODEL}"
+echo "  🎓 Finetuned Model:   saves/finetune/${RUN_NAME}_finetuned"
+echo "  🧹 Unlearned Model:   saves/unlearn/${RUN_NAME}_unlearned"
+echo ""
 echo "Generated Artifacts:"
 echo "  📄 Domain JSON:       ${OUTPUT_DIR}/domain.json"
 echo "  📦 QA Forget Dataset: ${DATA_DIR}/${DATASET_NAME}/qa_dataset_forget"
 echo "  📦 QA Retain Dataset: ${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain"
-echo "  📦 Text Forget Dataset: ${DATA_DIR}/${DATASET_NAME}/text_dataset_forget"
-echo "  📦 Text Retain Dataset: ${DATA_DIR}/${DATASET_NAME}/text_dataset_retain"
-echo "  🧠 Model Checkpoint:  saves/unlearn/${RUN_NAME}"
+echo "  📊 Evaluation Results: results/${DATASET_NAME}/${TIMESTAMP}/"
+echo "     - qualitative.csv    (full model responses)"
+echo "     - quantitative.csv   (aggregated metrics)"
+echo "     - detailed_metrics.csv (per-sample metrics)"
 echo "  📋 Run Summary:       ${DATA_DIR}/run_summary.json"
 echo ""
-echo "Next Steps:"
-echo "  1. Evaluate the unlearned model:"
-echo "     uv run python src/eval.py \\"
-echo "       model=${MODEL} \\"
-echo "       model.model_args.pretrained_model_name_or_path=saves/unlearn/${RUN_NAME} \\"
-echo "       task_name=${RUN_NAME}_eval"
-echo ""
-echo "  2. Test the model with queries about '${TOPIC}' to verify unlearning"
-echo ""
-echo "  3. Compare with baseline model to measure forget quality"
+echo "To re-run evaluation only:"
+echo "  uv run python scripts/evaluate-unlearning.py --run-summary ${DATA_DIR}/run_summary.json"
 echo ""
 echo "================================================================================================"
