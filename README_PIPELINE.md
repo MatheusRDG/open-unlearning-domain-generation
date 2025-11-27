@@ -137,9 +137,22 @@ uv run python scripts/evaluate-unlearning.py \
     --max-samples 50
 ```
 
-### Clean Up Checkpoints
+### Clean Up Experiments
 ```bash
-bash scripts/cleanup-checkpoints.sh
+# Interactive mode (asks what to delete)
+bash scripts/clean-experiments.sh
+
+# Delete everything (models, data, results, configs)
+bash scripts/clean-experiments.sh --all
+
+# Delete only specific things
+bash scripts/clean-experiments.sh --models    # Model checkpoints only
+bash scripts/clean-experiments.sh --data      # Generated datasets only
+bash scripts/clean-experiments.sh --results   # Evaluation CSVs only
+bash scripts/clean-experiments.sh --configs   # Generated Hydra configs only
+
+# Preview what would be deleted (no actual deletion)
+bash scripts/clean-experiments.sh --all --dry-run
 ```
 
 ### Manual Training Commands
