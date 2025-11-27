@@ -484,7 +484,8 @@ echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo ""
 
 # Define model paths (use ./ prefix so they're recognized as local paths)
-FINETUNED_MODEL_PATH="./saves/finetune/${RUN_NAME}_finetuned"
+# Note: train.yaml uses mode=train, unlearn.yaml uses mode=unlearn
+FINETUNED_MODEL_PATH="./saves/train/${RUN_NAME}_finetuned"
 UNLEARNED_MODEL_PATH="./saves/unlearn/${RUN_NAME}_unlearned"
 
 # Create finetune config for training on forget data (to teach the model the domain)
@@ -537,7 +538,7 @@ uv run python src/train.py --config-name=train.yaml \
 
 echo ""
 echo "✅ Fine-tuning complete!"
-echo "   Finetuned model saved to: saves/finetune/${RUN_NAME}_finetuned"
+echo "   Finetuned model saved to: ${FINETUNED_MODEL_PATH}"
 echo ""
 
 ##############################################################################
@@ -574,7 +575,7 @@ uv run python src/train.py --config-name=unlearn.yaml \
 
 echo ""
 echo "✅ Unlearning complete!"
-echo "   Unlearned model saved to: saves/unlearn/${RUN_NAME}_unlearned"
+echo "   Unlearned model saved to: ${UNLEARNED_MODEL_PATH}"
 echo ""
 
 ##############################################################################
