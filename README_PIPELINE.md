@@ -63,8 +63,8 @@ bash scripts/domain-unlearn-extended.sh "Brazil" Llama-3.2-3B-Instruct NPO
 ├── output/{timestamp}/              # Generated domain.json per run
 ├── data/run/{timestamp}/{topic}/    # HuggingFace datasets
 ├── saves/
-│   ├── finetune/{run}_finetuned/    # Fine-tuned model checkpoints
-│   └── unlearn/{run}_unlearned/     # Unlearned model checkpoints
+│   ├── train/{run}_finetuned/       # Fine-tuned model checkpoints (mode=train)
+│   └── unlearn/{run}_unlearned/     # Unlearned model checkpoints (mode=unlearn)
 └── results/{topic}/{timestamp}/     # Evaluation CSVs
 ```
 
@@ -98,12 +98,12 @@ export GEN_GROUNDED_QA_MAX_ITEMS=25
 
 ### Step 4: Fine-tuning
 - Trains base model on forget set (teaches domain knowledge)
-- Default: 2 epochs, lr=1e-5
-- Output: `saves/finetune/{run}_finetuned/`
+- Default: 1 epoch, lr=1e-5
+- Output: `saves/train/{run}_finetuned/`
 
 ### Step 5: Unlearning
 - Runs unlearning on finetuned model
-- Default: 10 epochs, GradAscent
+- Default: 1 epoch, GradAscent
 - Output: `saves/unlearn/{run}_unlearned/`
 
 ### Step 6: Evaluation
@@ -130,8 +130,8 @@ uv run python scripts/evaluate-unlearning.py \
 ```bash
 uv run python scripts/evaluate-unlearning.py \
     --raw-model meta-llama/Llama-3.2-1B-Instruct \
-    --finetuned-model saves/finetune/brazil_20251127_finetuned \
-    --unlearned-model saves/unlearn/brazil_20251127_unlearned \
+    --finetuned-model ./saves/train/brazil_20251127_finetuned \
+    --unlearned-model ./saves/unlearn/brazil_20251127_unlearned \
     --data-dir data/run/20251127/brazil \
     --output-dir results/brazil/20251127 \
     --max-samples 50
@@ -171,7 +171,7 @@ CUDA_VISIBLE_DEVICES=0 uv run python src/train.py --config-name=train.yaml \
 CUDA_VISIBLE_DEVICES=0 uv run python src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/brazil \
     task_name=brazil_unlearned \
-    model.model_args.pretrained_model_name_or_path=saves/finetune/brazil_finetuned \
+    model.model_args.pretrained_model_name_or_path=./saves/train/brazil_finetuned \
     trainer.args.num_train_epochs=10
 ```
 
@@ -203,7 +203,7 @@ CUDA_VISIBLE_DEVICES=0 uv run python src/train.py --config-name=unlearn.yaml \
 
 ### Fine-tuning (teach domain)
 ```bash
-FINETUNE_EPOCHS=2          # Don't overfit
+FINETUNE_EPOCHS=1          # Quick test (increase for stronger learning)
 FINETUNE_LEARNING_RATE=1e-5
 FINETUNE_BATCH_SIZE=4
 FINETUNE_GRADIENT_ACCUMULATION=4  # Effective: 16
@@ -211,7 +211,7 @@ FINETUNE_GRADIENT_ACCUMULATION=4  # Effective: 16
 
 ### Unlearning (forget domain)
 ```bash
-UNLEARN_EPOCHS=10
+UNLEARN_EPOCHS=1           # Quick test (increase for stronger unlearning)
 UNLEARN_LEARNING_RATE=1e-5
 UNLEARN_BATCH_SIZE=4
 UNLEARN_GRADIENT_ACCUMULATION=8  # Effective: 32
@@ -288,7 +288,7 @@ configs/experiment/finetune/domain/{topic}.yaml
 configs/experiment/unlearn/domain/{topic}.yaml
 
 # Models
-saves/finetune/{topic}_{timestamp}_finetuned/
+saves/train/{topic}_{timestamp}_finetuned/
 saves/unlearn/{topic}_{timestamp}_unlearned/
 
 # Results

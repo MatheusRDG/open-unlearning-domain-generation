@@ -101,9 +101,8 @@ if [ "$DELETE_ALL" = true ] || [ "$DELETE_MODELS" = true ] || [ "$INTERACTIVE" =
     fi
 
     if [ "$DELETE_MODELS" = true ] || [ "$DELETE_ALL" = true ]; then
-        cleanup_dir "./saves/finetune" "Finetuned models (saves/finetune)"
+        cleanup_dir "./saves/train" "Finetuned models (saves/train)"
         cleanup_dir "./saves/unlearn" "Unlearned models (saves/unlearn)"
-        cleanup_dir "./saves/train" "Training outputs (saves/train)"
         cleanup_dir "./saves/eval" "Eval outputs (saves/eval)"
     fi
     echo ""
