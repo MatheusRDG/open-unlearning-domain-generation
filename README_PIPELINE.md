@@ -112,7 +112,7 @@ export GEN_GROUNDED_QA_MAX_ITEMS=25
   - **Finetuned**: Knows the domain
   - **Unlearned**: Should have forgotten
 - Output: `results/{topic}/{timestamp}/`
-  - `qualitative.csv` - Full responses
+  - `qualitative.tsv` - Full responses (tab-separated for text compatibility)
   - `quantitative.csv` - Aggregated metrics
   - `detailed_metrics.csv` - Per-sample metrics
 
@@ -292,7 +292,7 @@ saves/train/{topic}_{timestamp}_finetuned/
 saves/unlearn/{topic}_{timestamp}_unlearned/
 
 # Results
-results/{topic}/{timestamp}/qualitative.csv
+results/{topic}/{timestamp}/qualitative.tsv
 results/{topic}/{timestamp}/quantitative.csv
 results/{topic}/{timestamp}/detailed_metrics.csv
 ```

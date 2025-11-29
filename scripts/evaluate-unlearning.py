@@ -337,13 +337,13 @@ def evaluate_models(
             "unlearned_is_refusal": unlearned_metrics["is_refusal"],
         })
 
-    # Save qualitative CSV
-    qualitative_csv = output_path / "qualitative.csv"
-    with open(qualitative_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=qualitative_results[0].keys())
+    # Save qualitative results as TSV (tab-separated) - better for text with commas
+    qualitative_tsv = output_path / "qualitative.tsv"
+    with open(qualitative_tsv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=qualitative_results[0].keys(), delimiter='\t')
         writer.writeheader()
         writer.writerows(qualitative_results)
-    print(f"\nQualitative results saved to: {qualitative_csv}")
+    print(f"\nQualitative results saved to: {qualitative_tsv}")
 
     # Calculate aggregated metrics
     forget_metrics = [m for m in detailed_metrics if m["dataset"] == "forget"]
