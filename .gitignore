@@ -1,4 +1,5 @@
 .claude
+results
 # custom .gitignore
 data
 submit.py

@@ -1,9 +1,0 @@
-metric,raw_forget,finetuned_forget,unlearned_forget,raw_retain,finetuned_retain,unlearned_retain
-contains_answer_rate,0.0100,0.0100,0.0000,0.0000,0.0100,0.0000
-word_f1,0.1322,0.2264,0.1147,0.0770,0.1842,0.1032
-rouge_l,0.0956,0.1855,0.0970,0.0565,0.1503,0.0953
-refusal_rate,0.1500,0.0000,0.0000,0.1600,0.0000,0.0000
----UNLEARNING_METRICS---,,,,,,
-forget_efficacy,,,0.0100,,,
-retain_preservation,,,,,,0.0000
-learning_gain,,0.0000,,,,
