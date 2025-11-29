@@ -98,13 +98,15 @@ export GEN_GROUNDED_QA_MAX_ITEMS=25
 
 ### Step 4: Fine-tuning
 - Trains base model on forget set (teaches domain knowledge)
-- Default: 1 epoch, lr=1e-5
+- Default: 3 epochs, lr=1e-5
 - Output: `saves/train/{run}_finetuned/`
 
 ### Step 5: Unlearning
 - Runs unlearning on finetuned model
-- Default: 1 epoch, GradAscent
+- Default: 3 epochs, **GradDiff** (gamma=0.5, alpha=1.0)
 - Output: `saves/unlearn/{run}_unlearned/`
+
+**Note**: GradDiff balances forget loss with retain loss, preventing model corruption that can occur with aggressive methods like GradAscent.
 
 ### Step 6: Evaluation
 - Compares 3 models on forget/retain sets:
@@ -184,11 +186,13 @@ CUDA_VISIBLE_DEVICES=0 uv run python src/train.py --config-name=unlearn.yaml \
 - `word_f1` - Word-level F1 score
 - `rouge_l` - ROUGE-L (sequence similarity)
 - `is_refusal` - Model refused to answer
+- `perplexity` - Model fluency (low = good, >1000 = corrupted)
 
 ### Aggregated Metrics
 - `learning_gain` = finetuned - raw on forget set (did fine-tuning work?)
 - `forget_efficacy` = finetuned - unlearned on forget set (did unlearning work?)
 - `retain_preservation` = unlearned / finetuned on retain set (utility preserved?)
+- `avg_perplexity` - Average response perplexity (detects model corruption)
 
 ### Expected Results
 | Model | Forget Set | Retain Set |
@@ -203,7 +207,7 @@ CUDA_VISIBLE_DEVICES=0 uv run python src/train.py --config-name=unlearn.yaml \
 
 ### Fine-tuning (teach domain)
 ```bash
-FINETUNE_EPOCHS=1          # Quick test (increase for stronger learning)
+FINETUNE_EPOCHS=3
 FINETUNE_LEARNING_RATE=1e-5
 FINETUNE_BATCH_SIZE=4
 FINETUNE_GRADIENT_ACCUMULATION=4  # Effective: 16
@@ -211,10 +215,14 @@ FINETUNE_GRADIENT_ACCUMULATION=4  # Effective: 16
 
 ### Unlearning (forget domain)
 ```bash
-UNLEARN_EPOCHS=1           # Quick test (increase for stronger unlearning)
+UNLEARN_EPOCHS=3
 UNLEARN_LEARNING_RATE=1e-5
 UNLEARN_BATCH_SIZE=4
 UNLEARN_GRADIENT_ACCUMULATION=8  # Effective: 32
+
+# GradDiff method parameters (balances forget vs retain)
+UNLEARN_GAMMA=0.5   # Forget loss weight (lower = gentler)
+UNLEARN_ALPHA=1.0   # Retain loss weight (preserves utility)
 ```
 
 ---
@@ -302,14 +310,26 @@ results/{topic}/{timestamp}/detailed_metrics.csv
 ## Available Unlearning Methods
 
 Located in `src/trainer/unlearn/`:
-- `GradAscent` - Gradient ascent on forget set
-- `GradDiff` - Gradient difference
-- `NPO` - Negative Preference Optimization
-- `DPO` - Direct Preference Optimization
-- `RMU` - Representation Misdirection
-- And more...
+
+| Method | Safety | Description |
+|--------|--------|-------------|
+| **GradDiff** (default) | HIGH | Balances forget + retain loss. Recommended. |
+| `GradAscent` | LOW | Aggressive, can corrupt model. Avoid. |
+| `NPO` | HIGH | DPO-based, smooth gradients (beta=0.1) |
+| `UNDIAL` | VERY HIGH | Self-distillation, preserves utility |
+| `SatImp` | VERY HIGH | Adaptive reweighting (gamma=0.1) |
+| `DPO` | HIGH | Requires alternate answers |
+| `RMU` | MEDIUM | Layer-targeted unlearning |
 
 Change method:
 ```bash
 bash scripts/domain-unlearn-extended.sh "Brazil" Llama-3.2-1B-Instruct NPO
+```
+
+### Tuning GradDiff
+If model still corrupts, reduce gamma:
+```bash
+# In domain-unlearn-extended.sh
+UNLEARN_GAMMA=0.3   # More gentle (default: 0.5)
+UNLEARN_ALPHA=1.0   # Keep retain weight
 ```

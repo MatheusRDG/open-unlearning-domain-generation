@@ -75,7 +75,7 @@ done
 # Assign positional arguments with defaults
 TOPIC="${POSITIONAL_ARGS[0]:-Brazil}"
 MODEL="${POSITIONAL_ARGS[1]:-Llama-3.2-1B-Instruct}"
-TRAINER="${POSITIONAL_ARGS[2]:-GradAscent}"
+TRAINER="${POSITIONAL_ARGS[2]:-GradDiff}"
 
 # Configuration
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -86,15 +86,19 @@ RUN_NAME="${DATASET_NAME}_${TIMESTAMP}"
 
 # Fine-tuning hyperparameters
 FINETUNE_EPOCHS=3
-FINETUNE_LEARNING_RATE=3e-4 
+FINETUNE_LEARNING_RATE=1e-5
 FINETUNE_BATCH_SIZE=4
 FINETUNE_GRADIENT_ACCUMULATION=4  # Effective batch size = 16
 
 # Unlearning hyperparameters
 UNLEARN_EPOCHS=3
-UNLEARN_LEARNING_RATE=3e-4 
+UNLEARN_LEARNING_RATE=1e-5
 UNLEARN_BATCH_SIZE=4
 UNLEARN_GRADIENT_ACCUMULATION=8  # Effective batch size = 32
+
+# GradDiff method hyperparameters (balances forget vs retain)
+UNLEARN_GAMMA=0.5   # Forget loss weight (lower = gentler unlearning)
+UNLEARN_ALPHA=1.0   # Retain loss weight (keeps model utility)
 
 # Common hyperparameters
 WARMUP_EPOCHS=1.0
@@ -138,6 +142,8 @@ echo "  Batch Size:         ${UNLEARN_BATCH_SIZE}"
 echo "  Gradient Accum:     ${UNLEARN_GRADIENT_ACCUMULATION}"
 echo "  Effective Batch:    $((UNLEARN_BATCH_SIZE * UNLEARN_GRADIENT_ACCUMULATION))"
 echo "  Learning Rate:      ${UNLEARN_LEARNING_RATE}"
+echo "  Gamma (forget):     ${UNLEARN_GAMMA}"
+echo "  Alpha (retain):     ${UNLEARN_ALPHA}"
 echo "================================================================================================"
 echo ""
 
@@ -561,6 +567,8 @@ uv run python src/train.py --config-name=unlearn.yaml \
     trainer.args.learning_rate=${UNLEARN_LEARNING_RATE} \
     trainer.args.per_device_train_batch_size=${UNLEARN_BATCH_SIZE} \
     trainer.args.gradient_accumulation_steps=${UNLEARN_GRADIENT_ACCUMULATION} \
+    trainer.method_args.gamma=${UNLEARN_GAMMA} \
+    trainer.method_args.alpha=${UNLEARN_ALPHA} \
     +trainer.args.warmup_epochs=${WARMUP_EPOCHS} \
     trainer.args.weight_decay=${WEIGHT_DECAY} \
     trainer.args.save_strategy=epoch \

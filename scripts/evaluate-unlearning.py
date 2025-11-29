@@ -27,6 +27,7 @@ import argparse
 import json
 import csv
 import re
+import math
 from pathlib import Path
 from datetime import datetime
 from collections import Counter
@@ -89,6 +90,27 @@ def generate_response(model, tokenizer, question: str, max_new_tokens: int = 128
     )
 
     return response.strip()
+
+
+def calculate_perplexity(model, tokenizer, text: str) -> float:
+    """
+    Calculate perplexity of text under the model.
+
+    Low perplexity = model is fluent, text is natural
+    High perplexity (>1000) = model may be corrupted/garbage output
+    """
+    if not text or len(text.strip()) == 0:
+        return float('inf')
+
+    inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512).to(model.device)
+
+    with torch.no_grad():
+        outputs = model(**inputs, labels=inputs["input_ids"])
+        loss = outputs.loss.item()
+
+    # Perplexity = exp(loss)
+    perplexity = math.exp(loss)
+    return perplexity
 
 
 def tokenize_text(text: str) -> list:
@@ -279,6 +301,9 @@ def evaluate_models(
         ("unlearned", unlearned_model_path),
     ]
 
+    # Store perplexities for each model
+    model_perplexities = {"raw": [], "finetuned": [], "unlearned": []}
+
     for model_name, model_path in models_to_evaluate:
         print(f"\n{'=' * 80}")
         print(f"Loading and evaluating {model_name.upper()} model...")
@@ -288,7 +313,12 @@ def evaluate_models(
 
         for i, result in enumerate(results):
             print(f"[{i+1}/{len(results)}] {result['question'][:50]}...")
-            result[f"{model_name}_response"] = generate_response(model, tokenizer, result["question"])
+            response = generate_response(model, tokenizer, result["question"])
+            result[f"{model_name}_response"] = response
+
+            # Calculate perplexity of the response
+            ppl = calculate_perplexity(model, tokenizer, response)
+            model_perplexities[model_name].append(ppl)
 
         del model
         torch.cuda.empty_cache()
@@ -316,6 +346,12 @@ def evaluate_models(
             "unlearned_response": result["unlearned_response"],
         })
 
+        # Get perplexities for this sample
+        idx = len(detailed_metrics)
+        raw_ppl = model_perplexities["raw"][idx] if idx < len(model_perplexities["raw"]) else float('inf')
+        finetuned_ppl = model_perplexities["finetuned"][idx] if idx < len(model_perplexities["finetuned"]) else float('inf')
+        unlearned_ppl = model_perplexities["unlearned"][idx] if idx < len(model_perplexities["unlearned"]) else float('inf')
+
         # Detailed metrics per sample
         detailed_metrics.append({
             "dataset": result["dataset"],
@@ -325,16 +361,19 @@ def evaluate_models(
             "raw_word_f1": raw_metrics["word_f1"],
             "raw_rouge_l": raw_metrics["rouge_l"],
             "raw_is_refusal": raw_metrics["is_refusal"],
+            "raw_perplexity": round(raw_ppl, 2),
             # Finetuned metrics
             "finetuned_contains_answer": finetuned_metrics["contains_answer"],
             "finetuned_word_f1": finetuned_metrics["word_f1"],
             "finetuned_rouge_l": finetuned_metrics["rouge_l"],
             "finetuned_is_refusal": finetuned_metrics["is_refusal"],
+            "finetuned_perplexity": round(finetuned_ppl, 2),
             # Unlearned metrics
             "unlearned_contains_answer": unlearned_metrics["contains_answer"],
             "unlearned_word_f1": unlearned_metrics["word_f1"],
             "unlearned_rouge_l": unlearned_metrics["rouge_l"],
             "unlearned_is_refusal": unlearned_metrics["is_refusal"],
+            "unlearned_perplexity": round(unlearned_ppl, 2),
         })
 
     # Save qualitative results as TSV (tab-separated) - better for text with commas
@@ -400,6 +439,20 @@ def evaluate_models(
     quantitative_summary["raw_retain"].append(rate([m["raw_is_refusal"] for m in retain_metrics]))
     quantitative_summary["finetuned_retain"].append(rate([m["finetuned_is_refusal"] for m in retain_metrics]))
     quantitative_summary["unlearned_retain"].append(rate([m["unlearned_is_refusal"] for m in retain_metrics]))
+
+    # Average Perplexity (low = fluent, high > 1000 = corrupted)
+    def safe_avg_ppl(lst):
+        """Average perplexity, filtering out inf values."""
+        finite = [x for x in lst if x != float('inf') and x < 10000]
+        return sum(finite) / len(finite) if finite else float('inf')
+
+    quantitative_summary["metric"].append("avg_perplexity")
+    quantitative_summary["raw_forget"].append(safe_avg_ppl([m["raw_perplexity"] for m in forget_metrics]))
+    quantitative_summary["finetuned_forget"].append(safe_avg_ppl([m["finetuned_perplexity"] for m in forget_metrics]))
+    quantitative_summary["unlearned_forget"].append(safe_avg_ppl([m["unlearned_perplexity"] for m in forget_metrics]))
+    quantitative_summary["raw_retain"].append(safe_avg_ppl([m["raw_perplexity"] for m in retain_metrics]))
+    quantitative_summary["finetuned_retain"].append(safe_avg_ppl([m["finetuned_perplexity"] for m in retain_metrics]))
+    quantitative_summary["unlearned_retain"].append(safe_avg_ppl([m["unlearned_perplexity"] for m in retain_metrics]))
 
     # Add computed unlearning metrics
     # Forget Efficacy: How much knowledge was removed (finetuned - unlearned on forget set)
@@ -491,6 +544,23 @@ def evaluate_models(
     print(f"  Learning Gain:       {learning_gain:+.2%} (finetuned vs raw on forget)")
     print(f"  Forget Efficacy:     {forget_efficacy:+.2%} (finetuned vs unlearned on forget)")
     print(f"  Retain Preservation: {retain_preservation:.2%} (unlearned / finetuned on retain)")
+
+    # Get perplexity values (index 4 after contains_answer, word_f1, rouge_l, refusal_rate)
+    raw_ppl = quantitative_summary["raw_forget"][4] if len(quantitative_summary["raw_forget"]) > 4 else 0
+    finetuned_ppl = quantitative_summary["finetuned_forget"][4] if len(quantitative_summary["finetuned_forget"]) > 4 else 0
+    unlearned_ppl = quantitative_summary["unlearned_forget"][4] if len(quantitative_summary["unlearned_forget"]) > 4 else 0
+
+    print("\n" + "=" * 80)
+    print("MODEL HEALTH (Perplexity - lower is better, >1000 = corrupted)")
+    print("=" * 80)
+    if isinstance(raw_ppl, float) and raw_ppl != float('inf'):
+        print(f"  Raw:       {raw_ppl:.1f}")
+    if isinstance(finetuned_ppl, float) and finetuned_ppl != float('inf'):
+        print(f"  Finetuned: {finetuned_ppl:.1f}")
+    if isinstance(unlearned_ppl, float) and unlearned_ppl != float('inf'):
+        print(f"  Unlearned: {unlearned_ppl:.1f}")
+        if unlearned_ppl > 1000:
+            print("  ⚠️  WARNING: Unlearned model may be corrupted (perplexity > 1000)")
     print("=" * 80)
 
     # Save detailed per-sample metrics
