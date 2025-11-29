@@ -1,0 +1,201 @@
+dataset,question,raw_contains_answer,raw_word_f1,raw_rouge_l,raw_is_refusal,finetuned_contains_answer,finetuned_word_f1,finetuned_rouge_l,finetuned_is_refusal,unlearned_contains_answer,unlearned_word_f1,unlearned_rouge_l,unlearned_is_refusal
+forget,Name the two major classes of basement terrain that dominate Brazil's geology.,False,0.058,0.0714,False,False,0.1538,0.125,False,False,0.1538,0.125,False
+forget,Which three broad controls govern Brazil's climatic patterns as stated in the book?,False,0.0,0.0,True,False,0.0,0.0,False,False,0.375,0.2353,False
+forget,"According to the text, what Köppen-type climate characterizes the northern Amazon and what is its ra",False,0.0,0.0,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,How do soils produced under humid tropical weathering conditions in Brazil typically appear?,False,0.029,0.0189,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,How does the book describe Brazil’s overall physiography?,False,0.1026,0.0496,False,False,0.2326,0.2083,False,False,0.0,0.0,False
+forget,What is the approximate area and percentage of Brazil occupied by the Amazon biome according to the ,False,0.1379,0.125,False,False,0.3704,0.1935,False,False,0.0,0.0,False
+forget,List the main forest and landscape types included within the Amazon biome as given in the text.,False,0.0541,0.0455,False,False,0.1,0.0833,False,False,0.1,0.0769,False
+forget,"What is the reported area range and approximate percentage of Brazil covered by the Cerrado, and wha",False,0.4681,0.3462,False,False,0.2909,0.1967,False,False,0.2143,0.2,False
+forget,What were the Atlantic Forest's original extent and the approximate proportion that remains today?,False,0.137,0.086,False,False,0.2424,0.2353,False,False,0.0,0.0,False
+forget,Provide the approximate size range of the Brazilian Pantanal and the Brazilian states where it is ce,False,0.3704,0.2692,False,False,0.2143,0.1765,False,False,0.1481,0.1212,False
+forget,"How long is Brazil’s coastline as stated, and which coastal ecosystems are listed as present there?",False,0.1765,0.1043,False,False,0.129,0.1212,False,False,0.0741,0.069,False
+forget,Name the four major river basins identified as organizing Brazil's surface hydrology.,False,0.3226,0.1818,False,False,0.6667,0.5882,False,False,0.7692,0.7143,False
+forget,How does the book characterize the Amazon basin in terms of drainage?,False,0.4667,0.3636,False,False,0.4,0.3125,False,False,0.48,0.3846,False
+forget,Give three examples of Brazil's important floodplain and wetland systems mentioned in the text.,False,0.1333,0.125,True,False,0.4,0.3333,False,False,0.2353,0.2222,False
+forget,"According to the book, what contrasts in groundwater storage are found across Brazil and which major",False,0.05,0.0444,True,False,0.1961,0.1311,False,False,0.0645,0.0571,False
+forget,How do coastal-hydrodynamic settings vary along Brazil’s coast as described in the text?,False,0.1333,0.1029,False,False,0.2273,0.1538,False,False,0.069,0.0625,False
+forget,What pattern of biodiversity concentration does the book say occurs in Brazil?,False,0.0667,0.0645,True,False,0.0952,0.0952,False,False,0.0,0.0,False
+forget,"Which region provides the largest extent of native forests and supports forestry uses, according to ",False,0.2571,0.2222,False,False,0.25,0.2353,False,False,0.1429,0.1333,False
+forget,Into which four broad categories does the book group ecosystem services provided by Brazil’s biomes?,False,0.08,0.0769,True,False,0.125,0.125,False,False,0.1429,0.1429,False
+forget,List the interacting drivers of contemporary deforestation and land conversion in Brazil identified ,False,0.122,0.0775,False,False,0.15,0.1395,False,False,0.1212,0.1111,False
+forget,What conservation instruments and governance elements does the book list as part of Brazil’s conserv,False,0.125,0.08,False,False,0.1538,0.0465,False,False,0.303,0.2286,False
+forget,What are the stated aims of restoration and sustainable‑landscape initiatives in Brazil?,False,0.1379,0.0714,False,False,0.1818,0.1739,False,False,0.2222,0.1111,False
+forget,Name three major ecological regions of pre‑colonial Brazil listed in the book.,False,0.0,0.0,False,False,0.625,0.6,False,False,0.4286,0.375,False
+forget,"What root crop is identified as a core food technology among indigenous peoples, and which three pro",False,0.05,0.0444,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,What range of indigenous political forms does the book describe for pre‑colonial Brazil?,False,0.1067,0.0862,False,False,0.069,0.0476,False,False,0.0,0.0,False
+forget,"According to the book, which kinds of nonhuman entities were treated as having agency in indigenous ",False,0.2162,0.1008,False,False,0.2105,0.2105,False,False,0.1429,0.1429,False
+forget,"On what date and by whom did Portuguese contact with the land called Brazil begin, as stated in the ",False,0.0,0.0,False,False,0.2,0.2,False,False,0.0,0.0,False
+forget,"What action did King João III take in 1534 to organize colonization of Brazil's coast, and to whom w",False,0.1111,0.0526,True,False,0.1935,0.1212,False,False,0.1905,0.0909,False
+forget,How does the book define the engenho (sugar mill) in relation to the colonial sugar economy?,False,0.1127,0.0721,False,False,0.2286,0.1579,False,False,0.2069,0.1818,False
+forget,What were two primary motivations for the bandeiras expeditions from São Paulo into the interior in ,False,0.2051,0.1395,False,False,0.2759,0.2424,False,False,0.24,0.1481,False
+forget,Which mineral discoveries transformed Brazil’s economy in the late seventeenth and early eighteenth ,False,0.3673,0.2951,False,False,0.3158,0.3,False,False,0.0,0.0,False
+forget,Give two examples of towns that became urban centers during the Gold Age in the Brazilian interior.,False,0.046,0.0351,False,False,0.1176,0.1176,False,False,0.1176,0.1176,False
+forget,How did the book describe the demographic character of the interior workforce in Minas by the mid‑ei,False,0.3571,0.2581,False,False,0.2857,0.2,False,False,0.0,0.0,False
+forget,List three forms of resistance by enslaved people mentioned in the chapter on resistance and rebelli,False,0.0533,0.0526,False,False,0.1739,0.1429,False,False,0.1429,0.1176,False
+forget,"According to the book, what major event in 1808 began the distinct process that produced Brazilian i",False,0.2286,0.1538,False,False,0.0909,0.0769,False,False,0.0909,0.0769,False
+forget,What was a key feature of the 1824 Constitution promulgated by Dom Pedro I as described in the text?,False,0.1463,0.1364,True,False,0.3077,0.1778,False,False,0.0,0.0,False
+forget,How does the book characterize Brazil’s enslaved population in the early nineteenth century?,False,0.1333,0.0862,False,False,0.16,0.2069,False,False,0.2,0.1818,False
+forget,"Into which region did coffee cultivation expand from the Paraíba Valley, according to the chapter on",False,0.0656,0.0741,True,False,0.125,0.1,False,False,0.0,0.0,False
+forget,"During the Old Republic (1889–about 1930), who does the book say held most political power?",False,0.1818,0.1714,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,"What ideological influences shaped early labor activism and strikes in the 1900s and 1910s, as descr",False,0.1333,0.0545,False,False,0.2273,0.1,False,False,0.2,0.2,False
+forget,How does the book summarize Getúlio Vargas’s rule (1930–1945) and its political orientation?,False,0.1905,0.1026,False,False,0.3077,0.3,False,False,0.0,0.0,False
+forget,Which president is identified with presiding under the 1946 Constitution that re‑established civil l,False,0.16,0.1538,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,What legal instrument from 1968 does the book single out as used by the military regime to suspend h,False,0.0,0.0,False,False,0.2667,0.0412,False,False,0.0,0.0,False
+forget,"When did redemocratization formally begin according to the book, and by what mechanism was the first",False,0.2069,0.2069,True,False,0.4138,0.3448,False,False,0.0,0.0,False
+forget,Name two contemporary challenges (post‑2003) the book lists as facing Brazil.,False,0.0,0.0,False,False,0.25,0.1111,False,False,0.0,0.0,False
+forget,Which Brazilian agency provides the census categories used to capture the country's racial and ethni,True,0.6154,0.5517,False,True,0.5714,0.5,False,False,0.0,0.0,False
+forget,List the census categories used by IBGE as given in the text.,False,0.0,0.0,True,False,0.1333,0.1333,False,False,0.1111,0.1111,False
+forget,"Approximately how many distinct Indigenous ethnic groups are identified in the book, and in which re",False,0.3429,0.3158,False,False,0.4444,0.4286,False,False,0.0,0.0,False
+forget,"According to the chapter on colonial and slave‑era legacies, what was one demographic effect of larg",False,0.0,0.0,True,False,0.2581,0.1622,False,False,0.0,0.0,False
+forget,How does the book characterize Brazil's mortality and fertility before the twentieth century and the,False,0.2278,0.0893,False,False,0.0588,0.0455,False,False,0.4,0.4,False
+forget,What combination of sources does the book say is required for high‑quality analysis of Brazil's demo,False,0.0741,0.0741,False,False,0.2222,0.1111,False,False,0.1429,0.1429,False
+forget,Which data source does the book identify as the backbone for long‑run population counts and structur,False,0.0723,0.0331,False,False,0.3077,0.3077,False,False,0.25,0.25,False
+forget,What share of Brazilians live in urban areas according to the book's summary of rural–urban migratio,False,0.2162,0.15,False,False,0.4444,0.4286,False,False,0.0,0.0,False
+forget,Which internal migration stream in mid‑twentieth century Brazil does the book identify as major?,False,0.0,0.0,False,False,0.2105,0.1905,False,False,0.0,0.0,False
+forget,Which two cities does the book cite as important urban centers in the North region?,False,0.0,0.0,True,False,0.3333,0.3333,False,False,0.25,0.25,False
+forget,"How has Brazil's rural population changed in proportional and absolute terms, as described in the bo",False,0.3265,0.2182,False,False,0.2632,0.2222,False,False,0.1714,0.1429,False
+forget,"What factors produce metropolitan inequalities and stark intra‑urban contrasts in Brazilian cities, ",False,0.08,0.0714,False,False,0.0741,0.1379,False,False,0.0833,0.08,False
+forget,"What kind of settlement did state‑led frontier policies promote, as noted in the chapter on interreg",False,0.0,0.0,True,False,0.2857,0.1538,False,False,0.0,0.0,False
+forget,How does the book describe Brazil's evolving role in international migration?,False,0.1176,0.0826,False,False,0.0588,0.0513,False,False,0.125,0.1176,False
+forget,Which origin is explicitly mentioned as a major inbound component of migrants to Brazil since 2000?,False,0.069,0.0667,False,False,0.1429,0.1429,False,False,0.0,0.0,False
+forget,What major change to Brazil's migration legal framework does the book note occurred in 2017?,False,0.1951,0.1395,False,False,0.2857,0.2,False,False,0.0,0.0,False
+forget,Which demographic shift is said to place increased demand on Brazil's healthcare systems?,False,0.3404,0.2187,False,False,0.3333,0.1111,False,False,0.2353,0.1176,False
+forget,What do various demographic projection scenarios suggest about Brazil's population by 2050?,False,0.1918,0.086,False,False,0.2609,0.1569,False,False,0.0,0.0,False
+forget,What does the book say will happen to the 'youth bulge' over time?,False,0.1316,0.0667,False,False,0.3333,0.3077,False,False,0.0,0.0,False
+forget,List three policy priority areas the book recommends to address demographic shifts.,False,0.069,0.0472,False,False,0.1875,0.0926,False,False,0.2,0.1875,False
+forget,"In what year was the Constitution discussed in the book promulgated, marking Brazil's transition fro",False,0.0,0.0,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,"According to the book, which four territorial components constitutionally comprise Brazil's federal ",False,0.125,0.1143,False,False,0.3846,0.4118,False,False,0.5556,0.4545,False
+forget,Name two types of rights explicitly protected by the 1988 Constitution as described in the text.,False,0.0,0.0,True,False,0.087,0.0769,False,False,0.1111,0.0952,False
+forget,What constitutional status and powers were newly emphasized for municipalities by the 1988 Constitut,False,0.2326,0.087,False,False,0.25,0.2553,False,False,0.16,0.0714,False
+forget,How does the book characterize the Brazilian presidency in relation to its power and constraints?,False,0.2564,0.1343,False,False,0.1905,0.1667,False,False,0.1905,0.1667,False
+forget,What are the principal units for policy design and coordination within Brazil’s federal executive as,False,0.0,0.0,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,What two features of Brazil’s civil service hiring and job security are highlighted in the text?,False,0.0923,0.0482,False,False,0.1714,0.1111,False,False,0.16,0.08,False
+forget,Which two named federal budget documents does the text say the executive prepares to structure fundi,False,0.1053,0.1,False,False,0.2353,0.3,False,False,0.3077,0.1429,False
+forget,"How many deputies are in the Chamber of Deputies and for what term length are they elected, accordin",False,0.1429,0.1212,False,False,0.2609,0.2308,False,False,0.0,0.0,False
+forget,How many senators compose the Federal Senate as stated in the text?,False,0.1538,0.1333,False,False,0.4,0.4,False,False,0.0,0.0,False
+forget,What key characteristic of Brazil’s party system does the book emphasize?,False,0.0645,0.0506,False,False,0.0667,0.0606,False,False,0.0,0.0,False
+forget,Describe the electoral rule used to elect the Chamber of Deputies as given in the content.,False,0.0526,0.0513,False,False,0.2727,0.125,False,False,0.16,0.16,False
+forget,What major campaign finance reform outcome from a 2015 Supreme Court ruling is noted in the book?,False,0.1081,0.0513,False,False,0.1212,0.1053,False,False,0.1667,0.0769,False
+forget,Which court does the book identify as the concentration point for constitutional review in Brazil?,False,0.0938,0.0522,False,False,0.75,0.75,False,False,0.5714,0.5714,False
+forget,What two modes of constitutional review does the text say operate in Brazil?,False,0.069,0.0625,True,False,0.25,0.3158,False,False,0.1429,0.125,False
+forget,Which federal law-enforcement agency does the book say handles federal crimes and cross-border inves,False,0.069,0.0645,False,False,0.2,0.2,False,False,0.0,0.0,False
+forget,What constitutional assurance regarding legal assistance does the book report?,False,0.0,0.0,False,False,0.3,0.3,False,False,0.3333,0.3333,False
+forget,Which major anti‑corruption investigation is cited as having exposed complex bribery and procurement,False,0.0,0.0,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,Name two elements of Brazil’s social policy architecture described in the content.,False,0.0,0.0,False,False,0.24,0.1538,False,False,0.087,0.087,False
+forget,List two types of civil society actors the book says have helped shape policy agendas and press for ,False,0.0541,0.05,False,False,0.3077,0.2,False,False,0.1,0.087,False
+forget,Which sector holds the largest share of Brazil’s GDP according to the book?,False,0.0278,0.0194,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,What fiscal rule introduced in 2016 is described as constraining Brazil’s spending?,False,0.16,0.0779,False,False,0.4167,0.1935,False,False,0.0,0.0,False
+forget,What is the name of Brazil’s explicit policy rate used to steer inflation expectations and short‑ter,False,0.1818,0.1667,False,False,0.3529,0.2222,False,False,0.0,0.0,False
+forget,How is Brazil’s banking sector characterized in the book?,False,0.1,0.093,False,False,0.2564,0.2381,False,False,0.0,0.0,False
+forget,What economic model shaped Brazil from the 16th century to the late 19th century?,False,0.1379,0.1176,False,False,0.2,0.2,False,False,0.0,0.0,False
+forget,Which strategy accelerated industrialization in Brazil during the 1930s–1970s?,False,0.0822,0.0594,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,What combination of factors in the 1970s–1980s increased Brazil’s external vulnerability?,False,0.1667,0.0684,False,False,0.1481,0.1379,False,False,0.0909,0.0909,False
+forget,What were the principal macroeconomic effects of the Real Plan described in the book?,False,0.0899,0.0606,False,False,0.1463,0.0784,False,False,0.1481,0.1333,False
+forget,How does the book distinguish direct agricultural activity from agribusiness in terms of GDP share?,False,0.2368,0.1308,False,False,0.3478,0.2414,False,False,0.08,0.0741,False
+forget,Which world‑scale mineral and which dominant firm are highlighted in the book’s account of Brazilian,False,0.0,0.0,False,False,0.4667,0.4375,False,False,0.2353,0.2105,False
+forget,What long‑term trend in manufacturing does the book report since the late 20th century?,False,0.1053,0.0714,False,False,0.1905,0.087,False,False,0.0,0.0,False
+forget,Which sector accounts for the majority of GDP and most formal employment in Brazil?,False,0.2105,0.2,False,False,0.0,0.0,False,False,0.0,0.0,False
+forget,Which types of products account for the largest share of Brazil’s exports?,False,0.1972,0.0926,False,False,0.3636,0.2609,False,False,0.125,0.1176,False
+forget,"In which global commodity market is Brazil described as a systemically important supplier, with grow",False,0.3125,0.2353,False,False,0.3333,0.3158,False,False,0.0,0.0,False
+forget,Which sectors does the book say typically attract foreign direct investment into Brazil?,False,0.0241,0.0317,False,False,0.3,0.2857,False,False,0.2,0.1905,False
+retain,How does the article link samba schools to political activity?,False,0.2051,0.1818,False,False,0.2609,0.25,False,False,0.0,0.0,False
+retain,Which topics does the Conclusion (Section 5) address about the future of samba schools?,False,0.1967,0.1235,False,False,0.5,0.303,False,False,0.25,0.25,False
+retain,"Based on Section 4, what role does tourism play in the political economy of samba schools?",False,0.122,0.0877,False,False,0.3243,0.2162,False,False,0.1176,0.1176,False
+retain,"According to the abstract, what three domains are mediated by aesthetics, funding flows, and media r",False,0.0625,0.0606,True,False,0.1429,0.1333,False,False,0.0,0.0,False
+retain,What is the primary focus of the article as stated in the abstract?,False,0.0702,0.0317,False,False,0.0816,0.069,False,False,0.1081,0.0513,False
+retain,"Which research methods does the study combine, according to the abstract and Methods section?",False,0.0,0.0,False,False,0.1,0.0909,False,False,0.125,0.1111,False
+retain,How does the article describe the trajectory of funk carioca's circulation in Section 3?,False,0.1143,0.1053,False,False,0.2286,0.1579,False,False,0.0,0.0,False
+retain,Which geographical and social setting does the article centre on?,False,0.0,0.0,False,False,0.08,0.0571,False,False,0.0,0.0,False
+retain,What theoretical literatures does the Introduction situate the analytic project at the intersection ,False,0.029,0.0206,False,False,0.087,0.0769,False,False,0.0,0.0,False
+retain,"According to Section 4, how do gendered performances in funk carioca function analytically?",False,0.0,0.0,False,False,0.1463,0.1304,False,False,0.0952,0.0952,False
+retain,"What kinds of platform-related phenomena does the article interrogate, per the abstract and Section ",False,0.0,0.0,False,False,0.1818,0.1667,False,False,0.1176,0.1111,False
+retain,What is meant by 'micro-level circuits' in Section 3?,False,0.058,0.0396,False,False,0.1176,0.1081,False,False,0.0,0.0,False
+retain,Which data source types are explicitly named in the Methods and Sources section?,False,0.0952,0.0417,False,False,0.0741,0.125,False,False,0.0909,0.0833,False
+retain,"What does the article link funk carioca’s platformization to in terms of outcomes, according to Sect",False,0.0,0.0,False,False,0.2222,0.1714,False,False,0.0,0.0,False
+retain,"From the abstract, which aspects of identity politics does the study examine in relation to funk car",False,0.0267,0.0179,False,False,0.2,0.1667,False,False,0.2,0.2,False
+retain,"What analytic approaches are combined to examine songs and videos, as stated in Methods and Sources?",False,0.05,0.087,True,False,0.0645,0.1143,False,False,0.25,0.2105,False
+retain,How does Section 4 link aesthetic labor to community processes?,False,0.1481,0.0877,False,False,0.1143,0.1026,False,False,0.16,0.1429,False
+retain,What role do municipal and corporate policy regimes play according to Section 5?,False,0.0,0.0,False,False,0.1481,0.1212,False,False,0.1538,0.1429,False
+retain,Which historical/local starting point for funk carioca’s production does the article identify in Sec,False,0.2,0.1333,False,False,0.0,0.0,False,False,0.2857,0.2857,False
+retain,"What does the mixed-methods design aim to achieve, as described in Methods and Sources?",False,0.1,0.062,False,False,0.2069,0.1212,False,False,0.16,0.08,False
+retain,"According to the abstract, what kinds of data inform the study besides ethnography and content analy",False,0.0,0.0,False,False,0.1818,0.1429,False,False,0.25,0.2222,False
+retain,"Implicitly, what consequence does digital mediation have for cultural labour in peripheral communiti",False,0.1235,0.0984,False,False,0.2759,0.2564,False,False,0.087,0.0769,False
+retain,What does the article interrogate about identity politics in the abstract?,False,0.0,0.0,False,False,0.2963,0.1818,False,False,0.381,0.3478,False
+retain,Which methodological element would allow the researcher to measure streaming visibility or algorithm,False,0.0556,0.037,False,False,0.1429,0.1429,False,False,0.25,0.25,False
+retain,What two factors does the paper investigate as shaping regional innovation performance in Brazil?,False,0.087,0.08,True,False,0.2143,0.1818,False,False,0.1176,0.1111,False
+retain,Which three measurable outcomes does the study focus on when assessing regional innovation performan,False,0.0,0.0,True,False,0.1667,0.1667,False,False,0.1538,0.1538,False
+retain,What is the geographic scope of the empirical analysis?,False,0.0,0.0,False,False,0.0833,0.0625,False,False,0.0,0.0,False
+retain,Which data sources are linked for the empirical analysis as stated in the paper?,False,0.0571,0.0556,False,False,0.087,0.0185,False,False,0.1176,0.1176,False
+retain,What identification strategy does the paper employ to estimate causal effects?,False,0.0,0.0,False,False,0.0,0.0,False,False,0.0,0.0,False
+retain,Which section situates the empirical exercise within Brazil’s higher-education and public-research l,False,0.0,0.0,True,False,0.2,0.1905,False,False,0.0,0.0,False
+retain,Which subsection describes the linked data architecture and the construction of the two policy-relev,False,0.1,0.0504,False,False,0.0,0.0,False,False,0.0,0.0,False
+retain,What heterogeneity dimensions does the study quantify in its analysis?,False,0.0,0.0,False,False,0.069,0.0247,False,False,0.1818,0.1429,False
+retain,Which section reports the estimated impacts of STEM graduate retention and university–industry colla,False,0.0333,0.02,False,False,0.1538,0.1538,False,False,0.0,0.0,False
+retain,Which subsection provides an overview of empirical contrasts and identification checks?,False,0.6,0.5625,False,False,0.6,0.5714,False,False,0.0,0.0,False
+retain,What type of policy recommendations does the paper draw in its conclusion?,False,0.1579,0.093,False,False,0.0714,0.0571,False,False,0.0,0.0,False
+retain,"Which section explicitly discusses policy implications, limitations, and the paper’s conclusions?",False,0.2564,0.2273,False,False,0.6667,0.6667,False,False,0.25,0.25,False
+retain,"According to the paper, what targeted levers are discussed to strengthen innovation outcomes?",False,0.0465,0.0351,False,False,0.2632,0.186,False,False,0.1905,0.0952,False
+retain,"From the document structure, which parts of the paper would most directly address robustness of the ",False,0.2319,0.112,False,False,0.1935,0.1333,False,False,0.2667,0.1905,False
+retain,What is the narrow focus stated in the introduction regarding the outcomes evaluated?,False,0.2182,0.1791,True,False,0.3846,0.3571,False,False,0.0,0.0,False
+retain,What methodological elements in the paper signal that the authors aim to estimate causal impacts rat,False,0.0988,0.0833,False,False,0.1579,0.1364,False,False,0.0,0.0,False
+retain,How does the paper frame university–industry collaboration in relation to regional innovation?,False,0.0494,0.0339,False,False,0.1875,0.1176,False,False,0.1818,0.1818,False
+retain,Which section would you consult to find the literature summary about Brazil’s education–innovation e,False,0.1212,0.055,False,False,0.2,0.1818,False,False,0.0,0.0,False
+retain,"What empirical contrasts does the paper estimate, as indicated in the section headings?",False,0.0625,0.0571,False,False,0.0,0.0,False,False,0.08,0.0714,False
+retain,What is the stated purpose of quantifying heterogeneity by region and institution type?,False,0.125,0.087,False,False,0.1379,0.1143,False,False,0.1429,0.129,False
+retain,What is the central focus of the paper as stated in the abstract?,False,0.0615,0.0526,False,False,0.1333,0.1111,False,False,0.0606,0.0588,False
+retain,Which specific geographic area does the study concentrate on?,False,0.0,0.0,False,False,0.1111,0.1053,False,False,0.1429,0.1429,False
+retain,What range of annual rainfall is reported for the study region?,False,0.0,0.0,False,False,0.0,0.0,False,False,0.2222,0.2222,False
+retain,Which populations are described as being directly threatened by the region's climate risks?,False,0.0556,0.0421,False,False,0.1333,0.1111,False,False,0.0,0.0,False
+retain,What empirical approach does the paper use to study institutional interactions and technology diffus,False,0.0909,0.0506,True,False,0.2273,0.1429,False,False,0.0,0.0,False
+retain,Which three core institutional actors are mapped in the study?,False,0.0,0.0,False,False,0.2105,0.0909,False,False,0.1429,0.1429,False
+retain,"Besides the core institutions, what other category of actors does Section 3 mention mapping?",False,0.0,0.0,False,False,0.0,0.0,False,False,0.0,0.0,False
+retain,What types of empirical results are reported in Section 4?,False,0.0,0.0,False,False,0.0571,0.0426,False,False,0.0,0.0,False
+retain,What problems and solutions does the paper explicitly identify in the abstract?,False,0.1304,0.0755,False,False,0.1176,0.084,False,False,0.1,0.0952,False
+retain,Which section contains the policy implications and recommendations for scaling inclusive AgTech inno,False,0.0357,0.0196,False,False,0.0,0.0,False,False,0.0,0.0,False
+retain,What specific metrics does Section 2 describe using in the empirical strategy?,False,0.0,0.0,False,False,0.1818,0.1667,False,False,0.1818,0.1818,False
+retain,What is the stated purpose of the institutional mapping in Section 3?,False,0.2051,0.1395,False,False,0.25,0.2286,False,False,0.3243,0.3256,False
+retain,"According to the study summary, what are the targeted policy levers intended to improve?",False,0.0889,0.0741,True,False,0.25,0.2051,False,False,0.1,0.0909,False
+retain,"Does the study address production, diffusion, or uptake of AgTech?",False,0.0732,0.0339,False,False,0.6154,0.6154,False,False,0.2,0.2,False
+retain,What methodological output is used to illustrate technology adoption in the field?,False,0.1176,0.0526,False,False,0.0,0.0,False,False,0.0,0.0,False
+retain,Does the empirical findings section examine funding flows?,False,0.1311,0.0822,False,False,0.6,0.4,False,False,0.1538,0.1538,False
+retain,What is the title of Section 1?,False,0.0,0.0,False,False,0.1818,0.1818,False,False,0.0,0.0,False
+retain,Which component of the mixed‑methods approach is used to analyze outcomes of technology transfer?,False,0.2529,0.1345,False,False,0.5714,0.303,False,False,0.0,0.0,False
+retain,What narrowly specified research question does the paper ask?,False,0.0833,0.0741,True,False,0.093,0.0417,False,False,0.0571,0.0526,False
+retain,Which three methodological components are combined in the paper's mixed-methods approach?,False,0.0328,0.0278,True,False,0.0714,0.0645,False,False,0.0741,0.0667,False
+retain,Which Brazilian states are the comparative case studies focused on?,False,0.0263,0.0179,False,False,0.4,0.4,False,False,0.0,0.0,False
+retain,How does the paper describe the role of targeted STEM teacher PD within regional innovation systems?,False,0.1026,0.0656,False,False,0.2222,0.1905,False,False,0.1818,0.1818,False
+retain,What geographic levels of indicators are used to trace causal pathways from PD to R&D performance?,False,0.0952,0.0652,False,False,0.1818,0.1053,False,False,0.2,0.2,False
+retain,What econometric identification strategy is explicitly mentioned in the paper?,False,0.0588,0.0476,False,False,0.08,0.069,False,False,0.0,0.0,False
+retain,"According to the paper, what feature of Brazil's system shapes the education-to-innovation pathway?",False,0.087,0.0833,True,False,0.087,0.069,False,False,0.0,0.0,False
+retain,What outcomes does the study aim to better align education investments with?,False,0.0,0.0,False,False,0.1667,0.1667,False,False,0.2857,0.2857,False
+retain,What does Section 4 present as the empirical backbone of the paper?,False,0.0392,0.0333,False,False,0.1,0.0392,False,False,0.0769,0.0769,False
+retain,At which schooling levels is the targeted STEM teacher PD implemented in the study?,False,0.0,0.0,False,False,0.1538,0.125,False,False,0.2,0.1538,False
+retain,What does the study map to improve alignment between education and R&D outcomes?,False,0.0317,0.0172,False,False,0.1538,0.1538,False,False,0.0,0.0,False
+retain,What type of human capital does the paper focus on forming through STEM PD?,False,0.3158,0.2564,False,False,0.3243,0.2632,False,False,0.1,0.1,False
+retain,Which broad topics are covered in the paper's policy implications and conclusion (Section 5)?,False,0.0952,0.0952,False,False,0.0645,0.0488,False,False,0.1667,0.1429,False
+retain,What kinds of evidence are combined to show PD's effects on human capital and innovation?,False,0.0845,0.0536,False,False,0.1538,0.1111,False,False,0.1429,0.1429,False
+retain,Does the paper focus on national-level innovation outcomes or regional/local innovation outcomes?,False,0.0,0.0,False,True,0.6154,0.6154,False,False,0.4,0.4,False
+retain,Which specific elements of the federal system are mentioned in Section 2 as part of the decentraliza,False,0.0,0.0,False,False,0.1818,0.1818,False,False,0.0,0.0,False
+retain,What panel-based empirical approach is referenced in the methods description?,False,0.0714,0.0625,False,False,0.25,0.2222,False,False,0.4,0.3333,False
+retain,What is the stated policy relevance of studying targeted STEM teacher PD according to the Introducti,False,0.1515,0.098,False,False,0.1379,0.069,False,False,0.087,0.087,False
+retain,What is the main objective of the paper described in the title and abstract?,False,0.037,0.0308,False,False,0.1091,0.0811,False,False,0.0784,0.0656,False
+retain,Which data sources are explicitly listed in the paper's methods section?,False,0.0,0.0,False,False,0.087,0.0667,False,False,0.0,0.0,False
+retain,Which stages of the education system does the paper link when quantifying the pipeline?,False,0.0526,0.0476,False,False,0.1538,0.1429,False,False,0.0,0.0,False
+retain,What kinds of outcomes does the paper connect regional STEM attainment to?,False,0.1081,0.0496,False,False,0.24,0.2143,False,False,0.0,0.0,False
+retain,"According to the introduction, why is Brazil's situation described as a 'puzzle for policy'?",False,0.0755,0.0606,False,False,0.2128,0.1455,False,False,0.1538,0.1538,False
+retain,What types of mismatches does the paper document in Brazil's pipeline?,False,0.0769,0.0741,False,False,0.2353,0.0909,False,False,0.2222,0.2222,False
+retain,What analytical approach does the paper use in its policy section to evaluate interventions?,False,0.0435,0.0385,False,False,0.16,0.1538,False,False,0.0,0.0,False
+retain,Name three targeted intervention areas the paper evaluates in the policy simulations.,False,0.0,0.0,False,False,0.125,0.125,False,False,0.1538,0.1538,False
+retain,What national assessment is mentioned as a data source for measuring student performance?,False,0.087,0.0833,True,False,0.1818,0.1818,False,False,0.0,0.0,False
+retain,Which agencies or systems supplying higher-education data are cited?,False,0.0,0.0,True,False,0.1,0.069,False,False,0.0,0.0,False
+retain,What does the paper aim to strengthen in lagging regions?,False,0.0,0.0,False,False,0.08,0.0606,False,False,0.0,0.0,False
+retain,What empirical linkage is emphasized in section 3?,False,0.0816,0.0678,True,False,0.1429,0.125,False,False,0.0909,0.0833,False
+retain,What kinds of survey or administrative records are used to observe firm innovation outcomes?,False,0.1111,0.0417,False,False,0.2857,0.1333,False,False,0.25,0.2222,False
+retain,"According to the conclusions, how is Brazil's STEM education-to-innovation pipeline characterized ge",False,0.0,0.0,True,False,0.1111,0.0976,False,False,0.0,0.0,False
+retain,What does the paper propose should be part of its research agenda or priorities?,False,0.0,0.0,True,False,0.0667,0.05,False,False,0.1818,0.1667,False
+retain,"From the content, what inference can be made about the spatial distribution of strong STEM productio",False,0.1739,0.084,False,False,0.3404,0.2264,False,False,0.0,0.0,False
+retain,"Why does the paper evaluate policy levers, based on the abstract and sections?",False,0.0769,0.0496,False,False,0.1143,0.1026,False,False,0.0909,0.087,False
+retain,"How does the paper handle dataset linking for analysis, as described in section 2?",False,0.0385,0.069,False,False,0.2353,0.2105,False,False,0.0952,0.0909,False
+retain,What target audience or policy problem is this paper addressing?,False,0.0588,0.0526,False,False,0.1633,0.1333,False,False,0.087,0.0833,False
+retain,"Give one implicit reason, drawn from the paper's scope, why university–industry misalignment matters",False,0.2545,0.1972,False,False,0.1818,0.1714,False,False,0.1538,0.1429,False

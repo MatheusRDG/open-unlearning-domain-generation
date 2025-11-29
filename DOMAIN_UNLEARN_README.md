@@ -13,7 +13,7 @@ bash scripts/domain-unlearn.sh "USA History" Llama-3.2-3B-Instruct GradAscent
 
 # Try different topics
 bash scripts/domain-unlearn.sh "Mexican Food" Llama-3.1-8B-Instruct NPO
-```
+```w
 
 ## 📋 Overview
 
