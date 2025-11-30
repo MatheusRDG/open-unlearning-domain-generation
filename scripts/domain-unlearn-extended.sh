@@ -77,6 +77,15 @@ TOPIC="${POSITIONAL_ARGS[0]:-Brazil}"
 MODEL="${POSITIONAL_ARGS[1]:-Llama-3.2-1B-Instruct}"
 TRAINER="${POSITIONAL_ARGS[2]:-NPO}"
 
+# Get full HuggingFace model path from config (e.g., "meta-llama/Llama-3.2-1B-Instruct" or "Qwen/Qwen2.5-1.5B-Instruct")
+MODEL_CONFIG_FILE="configs/model/${MODEL}.yaml"
+if [ -f "${MODEL_CONFIG_FILE}" ]; then
+    RAW_MODEL_PATH=$(grep "pretrained_model_name_or_path:" "${MODEL_CONFIG_FILE}" | head -1 | sed 's/.*: *"\(.*\)"/\1/' | sed "s/.*: *'\(.*\)'/\1/")
+else
+    # Fallback to meta-llama prefix if config not found
+    RAW_MODEL_PATH="meta-llama/${MODEL}"
+fi
+
 # Configuration
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 OUTPUT_DIR="output/${TIMESTAMP}"
@@ -598,7 +607,7 @@ echo ""
 # Run evaluation comparing all 3 models
 EVAL_OUTPUT_DIR="results/${DATASET_NAME}/${TIMESTAMP}"
 uv run python scripts/evaluate-unlearning.py \
-    --raw-model "meta-llama/${MODEL}" \
+    --raw-model "${RAW_MODEL_PATH}" \
     --finetuned-model "${FINETUNED_MODEL_PATH}" \
     --unlearned-model "${UNLEARNED_MODEL_PATH}" \
     --data-dir "${DATA_DIR}/${DATASET_NAME}" \
@@ -652,7 +661,7 @@ cat > "${DATA_DIR}/run_summary.json" << EOF
     "qa_dataset_retain": "${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain",
     "text_dataset_forget": "${DATA_DIR}/${DATASET_NAME}/text_dataset_forget",
     "text_dataset_retain": "${DATA_DIR}/${DATASET_NAME}/text_dataset_retain",
-    "raw_model": "meta-llama/${MODEL}",
+    "raw_model": "${RAW_MODEL_PATH}",
     "finetuned_model": "${FINETUNED_MODEL_PATH}",
     "unlearned_model": "${UNLEARNED_MODEL_PATH}",
     "evaluation_dir": "results/${DATASET_NAME}/${TIMESTAMP}",
@@ -680,7 +689,7 @@ echo "  Trainer:              ${TRAINER}"
 echo "  Run Name:             ${RUN_NAME}"
 echo ""
 echo "Generated Models:"
-echo "  🧠 Raw Model:         meta-llama/${MODEL}"
+echo "  🧠 Raw Model:         ${RAW_MODEL_PATH}"
 echo "  🎓 Finetuned Model:   ${FINETUNED_MODEL_PATH}"
 echo "  🧹 Unlearned Model:   ${UNLEARNED_MODEL_PATH}"
 echo ""
