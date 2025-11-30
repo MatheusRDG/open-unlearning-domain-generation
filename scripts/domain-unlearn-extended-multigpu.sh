@@ -491,8 +491,9 @@ echo "This creates a model that KNOWS the domain content (finetuned model)"
 echo ""
 
 # Set master port for distributed training
-export MASTER_PORT=$(python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
+export MASTER_PORT=$(uv run python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
 echo "Master Port: ${MASTER_PORT}"
+echo "Using ${NUM_GPUS} GPUs with torchrun"
 echo ""
 
 # Define model paths (use ./ prefix so they're recognized as local paths)
@@ -527,8 +528,8 @@ EOF
 
 echo "Created: ${FINETUNE_CONFIG_DIR}/${DATASET_NAME}.yaml"
 
-# Run fine-tuning with torchrun for multi-GPU
-uv run torchrun --nproc_per_node=${NUM_GPUS} --master_port=${MASTER_PORT} \
+# Run fine-tuning with accelerate for multi-GPU (more reliable than torchrun)
+uv run accelerate launch --num_processes=${NUM_GPUS} --main_process_port=${MASTER_PORT} --mixed_precision=bf16 \
     src/train.py --config-name=train.yaml \
     experiment=finetune/domain/${DATASET_NAME} \
     task_name=${RUN_NAME}_finetuned \
@@ -564,8 +565,8 @@ echo ""
 echo "This creates a model that should FORGET the domain content (unlearned model)"
 echo ""
 
-# Run unlearning with torchrun for multi-GPU
-uv run torchrun --nproc_per_node=${NUM_GPUS} --master_port=${MASTER_PORT} \
+# Run unlearning with accelerate for multi-GPU (more reliable than torchrun)
+uv run accelerate launch --num_processes=${NUM_GPUS} --main_process_port=${MASTER_PORT} --mixed_precision=bf16 \
     src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/${DATASET_NAME} \
     task_name=${RUN_NAME}_unlearned \
