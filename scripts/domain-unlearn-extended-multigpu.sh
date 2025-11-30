@@ -112,6 +112,11 @@ WEIGHT_DECAY=0.01
 NUM_GPUS=$(nvidia-smi -L | wc -l)
 echo "Detected ${NUM_GPUS} GPUs"
 
+# Set visible GPUs (0,1 for 2 GPUs, 0,1,2,3 for 4 GPUs, etc.)
+GPU_LIST=$(seq -s, 0 $((NUM_GPUS-1)))
+export CUDA_VISIBLE_DEVICES=${GPU_LIST}
+echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
+
 # Create directories
 mkdir -p "${DATA_DIR}"
 mkdir -p "${OUTPUT_DIR}"
@@ -528,8 +533,10 @@ EOF
 
 echo "Created: ${FINETUNE_CONFIG_DIR}/${DATASET_NAME}.yaml"
 
-# Run fine-tuning with accelerate for multi-GPU (more reliable than torchrun)
-uv run accelerate launch --num_processes=${NUM_GPUS} --main_process_port=${MASTER_PORT} --mixed_precision=bf16 \
+# Run fine-tuning with accelerate + DeepSpeed (as per docs/experiments.md)
+uv run accelerate launch \
+    --config_file configs/accelerate/default_config.yaml \
+    --main_process_port=${MASTER_PORT} \
     src/train.py --config-name=train.yaml \
     experiment=finetune/domain/${DATASET_NAME} \
     task_name=${RUN_NAME}_finetuned \
@@ -545,7 +552,6 @@ uv run accelerate launch --num_processes=${NUM_GPUS} --main_process_port=${MASTE
     trainer.args.logging_steps=1 \
     +trainer.args.logging_first_step=true \
     +trainer.args.dataloader_num_workers=0 \
-    trainer.args.ddp_find_unused_parameters=false \
     trainer.args.gradient_checkpointing=true \
     trainer.args.report_to=tensorboard
 
@@ -565,8 +571,10 @@ echo ""
 echo "This creates a model that should FORGET the domain content (unlearned model)"
 echo ""
 
-# Run unlearning with accelerate for multi-GPU (more reliable than torchrun)
-uv run accelerate launch --num_processes=${NUM_GPUS} --main_process_port=${MASTER_PORT} --mixed_precision=bf16 \
+# Run unlearning with accelerate + DeepSpeed (as per docs/experiments.md)
+uv run accelerate launch \
+    --config_file configs/accelerate/default_config.yaml \
+    --main_process_port=${MASTER_PORT} \
     src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/${DATASET_NAME} \
     task_name=${RUN_NAME}_unlearned \
@@ -585,7 +593,6 @@ uv run accelerate launch --num_processes=${NUM_GPUS} --main_process_port=${MASTE
     trainer.args.logging_steps=1 \
     +trainer.args.logging_first_step=true \
     +trainer.args.dataloader_num_workers=0 \
-    trainer.args.ddp_find_unused_parameters=false \
     trainer.args.gradient_checkpointing=true \
     trainer.args.report_to=tensorboard
 
