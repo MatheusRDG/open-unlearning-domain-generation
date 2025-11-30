@@ -99,9 +99,9 @@ FINETUNE_LEARNING_RATE=1e-5
 FINETUNE_BATCH_SIZE=4
 FINETUNE_GRADIENT_ACCUMULATION=4  # Effective batch size = 16
 
-# Unlearning hyperparameters
-UNLEARN_EPOCHS=3
-UNLEARN_LEARNING_RATE=1e-5
+# Unlearning hyperparameters (tuned per docs/repro.md)
+UNLEARN_EPOCHS=10
+UNLEARN_LEARNING_RATE=5e-6
 UNLEARN_BATCH_SIZE=4
 UNLEARN_GRADIENT_ACCUMULATION=8  # Effective batch size = 32
 
