@@ -75,7 +75,7 @@ done
 # Assign positional arguments with defaults
 TOPIC="${POSITIONAL_ARGS[0]:-Brazil}"
 MODEL="${POSITIONAL_ARGS[1]:-Llama-3.2-1B-Instruct}"
-TRAINER="${POSITIONAL_ARGS[2]:-GradDiff}"
+TRAINER="${POSITIONAL_ARGS[2]:-NPO}"
 
 # Configuration
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
