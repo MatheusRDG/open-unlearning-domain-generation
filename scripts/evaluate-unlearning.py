@@ -28,18 +28,32 @@ import json
 import math
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import torch
+import openai
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_from_disk
 from pydantic import BaseModel, Field
 from langchain.chat_models import init_chat_model
 from tqdm import tqdm
 from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
 # Load environment variables
 load_dotenv()
+
+
+# =============================================================================
+# Retry Configuration
+# =============================================================================
+
+RETRY_EXCEPTIONS = (
+    openai.RateLimitError,
+    openai.APIConnectionError,
+    openai.APITimeoutError,
+)
 
 
 # =============================================================================
@@ -82,6 +96,17 @@ def get_judge_llm():
     return llm.with_structured_output(RowJudgment)
 
 
+@retry(
+    retry=retry_if_exception_type(RETRY_EXCEPTIONS),
+    wait=wait_exponential(multiplier=2, min=2, max=120),
+    stop=stop_after_attempt(10),
+    reraise=True
+)
+def _invoke_judge_with_retry(judge_llm, prompt: str) -> RowJudgment:
+    """Invoke judge LLM with retry logic."""
+    return judge_llm.invoke(prompt)
+
+
 def judge_row(
     judge_llm,
     question: str,
@@ -90,7 +115,7 @@ def judge_row(
     finetuned_response: str,
     unlearned_response: str
 ) -> RowJudgment:
-    """Judge all 3 model responses in a single LLM call."""
+    """Judge all 3 model responses in a single LLM call with retry."""
     prompt = f"""You are evaluating 3 different models' responses to the same question.
 
 QUESTION: {question}
@@ -119,9 +144,9 @@ For EACH model (raw, finetuned, unlearned), evaluate:
 Also provide brief reasoning comparing the three responses."""
 
     try:
-        return judge_llm.invoke(prompt)
+        return _invoke_judge_with_retry(judge_llm, prompt)
     except Exception as e:
-        # Return default judgments on error
+        # Return default judgments on error after all retries exhausted
         default = SingleJudgment(
             contains_correct_info=False,
             is_refusal=False,
@@ -132,8 +157,47 @@ Also provide brief reasoning comparing the three responses."""
             raw=default,
             finetuned=default,
             unlearned=default,
-            reasoning=f"Error: {str(e)[:100]}"
+            reasoning=f"Error after retries: {str(e)[:100]}"
         )
+
+
+def judge_rows_parallel(
+    judge_llm,
+    results: List[dict],
+    max_workers: int = 10
+) -> List[dict]:
+    """Judge all rows in parallel with thread pool."""
+
+    def judge_single_row(result: dict) -> tuple:
+        """Judge a single row and return (index, judgment)."""
+        judgment = judge_row(
+            judge_llm,
+            result["question"],
+            result["ground_truth"],
+            result["raw_response"],
+            result["finetuned_response"],
+            result["unlearned_response"]
+        )
+        return (result, judgment)
+
+    # Process in parallel
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(judge_single_row, r): i for i, r in enumerate(results)}
+
+        for future in tqdm(as_completed(futures), total=len(results), desc="Judging (parallel)"):
+            result, judgment = future.result()
+
+            # Flatten judgment into result
+            for model_name in ["raw", "finetuned", "unlearned"]:
+                model_judgment = getattr(judgment, model_name)
+                result[f"{model_name}_contains_correct"] = model_judgment.contains_correct_info
+                result[f"{model_name}_is_refusal"] = model_judgment.is_refusal
+                result[f"{model_name}_relevance"] = model_judgment.relevance
+                result[f"{model_name}_accuracy"] = model_judgment.accuracy
+
+            result["judge_reasoning"] = judgment.reasoning
+
+    return results
 
 
 # =============================================================================
@@ -302,35 +366,18 @@ def evaluate_models(
         del model
         torch.cuda.empty_cache()
 
-    # Run LLM-as-Judge evaluation (1 API call per row, judging all 3 models at once)
+    # Run LLM-as-Judge evaluation (parallel, 1 API call per row, with retry)
     if not skip_judge:
         print("\n" + "=" * 80)
         print("Running LLM-as-Judge evaluation (gpt-4o-mini)...")
-        print(f"  Making {len(results)} API calls (1 per row, judging all 3 models)")
+        print(f"  {len(results)} API calls (1 per row, parallel with 10 workers)")
+        print(f"  Retry: exponential backoff (2s-120s, max 10 attempts)")
         print("=" * 80)
 
         judge_llm = get_judge_llm()
 
-        for result in tqdm(results, desc="Judging responses"):
-            # Judge all 3 models in a single LLM call
-            judgment = judge_row(
-                judge_llm,
-                result["question"],
-                result["ground_truth"],
-                result["raw_response"],
-                result["finetuned_response"],
-                result["unlearned_response"]
-            )
-
-            # Flatten judgment into result
-            for model_name in ["raw", "finetuned", "unlearned"]:
-                model_judgment = getattr(judgment, model_name)
-                result[f"{model_name}_contains_correct"] = model_judgment.contains_correct_info
-                result[f"{model_name}_is_refusal"] = model_judgment.is_refusal
-                result[f"{model_name}_relevance"] = model_judgment.relevance
-                result[f"{model_name}_accuracy"] = model_judgment.accuracy
-
-            result["judge_reasoning"] = judgment.reasoning
+        # Run all judgments in parallel
+        results = judge_rows_parallel(judge_llm, results, max_workers=10)
     else:
         # Add empty judgment fields
         for result in results:
