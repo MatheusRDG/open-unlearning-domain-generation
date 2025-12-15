@@ -376,13 +376,12 @@ def evaluate_models(
             "unlearned_perplexity": round(unlearned_ppl, 2),
         })
 
-    # Save qualitative results as TSV (tab-separated) - better for text with commas
-    qualitative_tsv = output_path / "qualitative.tsv"
-    with open(qualitative_tsv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=qualitative_results[0].keys(), delimiter='\t')
-        writer.writeheader()
-        writer.writerows(qualitative_results)
-    print(f"\nQualitative results saved to: {qualitative_tsv}")
+    # Save qualitative results as JSONL (one JSON object per line) - much cleaner for text data
+    qualitative_jsonl = output_path / "qualitative.jsonl"
+    with open(qualitative_jsonl, "w", encoding="utf-8") as f:
+        for result in qualitative_results:
+            f.write(json.dumps(result, ensure_ascii=False) + "\n")
+    print(f"\nQualitative results saved to: {qualitative_jsonl}")
 
     # Calculate aggregated metrics
     forget_metrics = [m for m in detailed_metrics if m["dataset"] == "forget"]
