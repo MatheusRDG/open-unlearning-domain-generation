@@ -452,11 +452,42 @@ def evaluate_models(
             "learning_gain": ft_forget - raw_forget,  # Did finetuning work?
         }
 
-    # Save quantitative summary
+    # Save quantitative summary as JSON
     summary_json = output_path / "quantitative_summary.json"
     with open(summary_json, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
     print(f"Quantitative summary saved to: {summary_json}")
+
+    # Save metrics summary as CSV (easy to view in spreadsheet)
+    summary_csv = output_path / "metrics_summary.csv"
+    with open(summary_csv, "w", encoding="utf-8") as f:
+        # Header
+        f.write("dataset,model,contains_correct_rate,refusal_rate,avg_relevance,avg_accuracy,avg_perplexity\n")
+
+        # Data rows
+        for dataset_name in ["forget", "retain"]:
+            for model_name in ["raw", "finetuned", "unlearned"]:
+                metrics = summary[dataset_name][model_name]
+                row = [
+                    dataset_name,
+                    model_name,
+                    f"{metrics['contains_correct_rate']:.4f}" if metrics['contains_correct_rate'] is not None else "",
+                    f"{metrics['refusal_rate']:.4f}" if metrics['refusal_rate'] is not None else "",
+                    f"{metrics['avg_relevance']:.2f}" if metrics['avg_relevance'] is not None else "",
+                    f"{metrics['avg_accuracy']:.2f}" if metrics['avg_accuracy'] is not None else "",
+                    f"{metrics['avg_perplexity']:.2f}" if metrics['avg_perplexity'] is not None else "",
+                ]
+                f.write(",".join(row) + "\n")
+
+        # Add unlearning metrics as separate section
+        if summary.get("unlearning_metrics"):
+            f.write("\n")
+            f.write("unlearning_metric,value\n")
+            for metric_name, value in summary["unlearning_metrics"].items():
+                if value is not None:
+                    f.write(f"{metric_name},{value:.4f}\n")
+
+    print(f"Metrics summary CSV saved to: {summary_csv}")
 
     # Print summary
     print("\n" + "=" * 80)
