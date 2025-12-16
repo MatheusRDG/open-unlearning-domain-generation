@@ -171,7 +171,7 @@ echo "System Check"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-uv run python -c "
+uv run --no-sync python -c "
 import sys
 import torch
 
@@ -254,7 +254,7 @@ else
     fi
 
     # Modify domain generation to use specified topic
-    uv run python -c "
+    uv run --no-sync python -c "
 import sys
 import json
 from pathlib import Path
@@ -356,7 +356,7 @@ echo "Step 2: Converting to HuggingFace Dataset Format"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-uv run python -m src.domain_generation.convert_to_dataset \
+uv run --no-sync python -m src.domain_generation.convert_to_dataset \
     "${OUTPUT_DIR}/domain.json" \
     --output-dir "${DATA_DIR}" \
     --dataset-name "${DATASET_NAME}" \
@@ -471,7 +471,7 @@ if [ -f .env ]; then
     source .env
     if [ -n "${HUGGINGFACE_TOKEN}" ]; then
         echo "Logging in to HuggingFace..."
-        echo "${HUGGINGFACE_TOKEN}" | uv run huggingface-cli login --token "${HUGGINGFACE_TOKEN}" --add-to-git-credential
+        echo "${HUGGINGFACE_TOKEN}" | uv run --no-sync huggingface-cli login --token "${HUGGINGFACE_TOKEN}" --add-to-git-credential
         echo "✅ HuggingFace authentication complete!"
     else
         echo "⚠️  Warning: HUGGINGFACE_TOKEN not found in .env"
@@ -496,7 +496,7 @@ echo "This creates a model that KNOWS the domain content (finetuned model)"
 echo ""
 
 # Set master port for distributed training
-export MASTER_PORT=$(uv run python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
+export MASTER_PORT=$(uv run --no-sync python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
 echo "Master Port: ${MASTER_PORT}"
 echo "Using ${NUM_GPUS} GPUs with torchrun"
 echo ""
@@ -534,7 +534,7 @@ EOF
 echo "Created: ${FINETUNE_CONFIG_DIR}/${DATASET_NAME}.yaml"
 
 # Run fine-tuning with accelerate + DeepSpeed (as per docs/experiments.md)
-uv run accelerate launch \
+uv run --no-sync accelerate launch \
     --config_file configs/accelerate/default_config.yaml \
     --main_process_port=${MASTER_PORT} \
     src/train.py --config-name=train.yaml \
@@ -572,7 +572,7 @@ echo "This creates a model that should FORGET the domain content (unlearned mode
 echo ""
 
 # Run unlearning with accelerate + DeepSpeed (as per docs/experiments.md)
-uv run accelerate launch \
+uv run --no-sync accelerate launch \
     --config_file configs/accelerate/default_config.yaml \
     --main_process_port=${MASTER_PORT} \
     src/train.py --config-name=unlearn.yaml \
@@ -615,7 +615,7 @@ export CUDA_VISIBLE_DEVICES=0
 
 # Run evaluation comparing all 3 models
 EVAL_OUTPUT_DIR="results/${DATASET_NAME}/${TIMESTAMP}"
-uv run python scripts/evaluate-unlearning.py \
+uv run --no-sync python scripts/evaluate-unlearning.py \
     --raw-model "${RAW_MODEL_PATH}" \
     --finetuned-model "${FINETUNED_MODEL_PATH}" \
     --unlearned-model "${UNLEARNED_MODEL_PATH}" \
@@ -715,6 +715,6 @@ echo "     - detailed_metrics.csv (per-sample metrics)"
 echo "  📋 Run Summary:       ${DATA_DIR}/run_summary.json"
 echo ""
 echo "To re-run evaluation only:"
-echo "  uv run python scripts/evaluate-unlearning.py --run-summary ${DATA_DIR}/run_summary.json"
+echo "  uv run --no-sync python scripts/evaluate-unlearning.py --run-summary ${DATA_DIR}/run_summary.json"
 echo ""
 echo "================================================================================================"
