@@ -33,5 +33,11 @@ dependencies = [
     "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
     "retrying>=1.3.3",
-    "flash-attn",
+    "tenacity>=8.0.0",
+    "tqdm>=4.0.0",
+    "flash-attn>=2.6.3",
 ]
+
+[tool.uv]
+# flash-attn needs torch during build, disable build isolation for it
+no-build-isolation-package = ["flash-attn"]

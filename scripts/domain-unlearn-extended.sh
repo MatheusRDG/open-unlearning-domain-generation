@@ -165,7 +165,7 @@ echo "System Check"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-uv run --no-sync python -c "
+uv run python -c "
 import sys
 import torch
 
@@ -247,7 +247,7 @@ else
     fi
 
     # Modify domain generation to use specified topic
-    uv run --no-sync python -c "
+    uv run python -c "
 import sys
 import json
 from pathlib import Path
@@ -349,7 +349,7 @@ echo "Step 2: Converting to HuggingFace Dataset Format"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-uv run --no-sync python -m src.domain_generation.convert_to_dataset \
+uv run python -m src.domain_generation.convert_to_dataset \
     "${OUTPUT_DIR}/domain.json" \
     --output-dir "${DATA_DIR}" \
     --dataset-name "${DATASET_NAME}" \
@@ -464,7 +464,7 @@ if [ -f .env ]; then
     source .env
     if [ -n "${HUGGINGFACE_TOKEN}" ]; then
         echo "Logging in to HuggingFace..."
-        echo "${HUGGINGFACE_TOKEN}" | uv run --no-sync huggingface-cli login --token "${HUGGINGFACE_TOKEN}" --add-to-git-credential
+        echo "${HUGGINGFACE_TOKEN}" | uv run huggingface-cli login --token "${HUGGINGFACE_TOKEN}" --add-to-git-credential
         echo "✅ HuggingFace authentication complete!"
     else
         echo "⚠️  Warning: HUGGINGFACE_TOKEN not found in .env"
@@ -493,7 +493,7 @@ echo "Forcing single GPU mode (GPU 0)..."
 export CUDA_VISIBLE_DEVICES=0
 
 # Set master port for distributed training (in case it's still used)
-export MASTER_PORT=$(uv run --no-sync python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
+export MASTER_PORT=$(uv run python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
 echo "Master Port: ${MASTER_PORT}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo ""
@@ -532,7 +532,7 @@ EOF
 echo "Created: ${FINETUNE_CONFIG_DIR}/${DATASET_NAME}.yaml"
 
 # Run fine-tuning on the FORGET data (teaching the model the domain)
-uv run --no-sync python src/train.py --config-name=train.yaml \
+uv run python src/train.py --config-name=train.yaml \
     experiment=finetune/domain/${DATASET_NAME} \
     task_name=${RUN_NAME}_finetuned \
     trainer.args.num_train_epochs=${FINETUNE_EPOCHS} \
@@ -568,7 +568,7 @@ echo "This creates a model that should FORGET the domain content (unlearned mode
 echo ""
 
 # Run unlearning starting from the FINETUNED model
-uv run --no-sync python src/train.py --config-name=unlearn.yaml \
+uv run python src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/${DATASET_NAME} \
     task_name=${RUN_NAME}_unlearned \
     model.model_args.pretrained_model_name_or_path=${FINETUNED_MODEL_PATH} \
@@ -606,7 +606,7 @@ echo ""
 
 # Run evaluation comparing all 3 models
 EVAL_OUTPUT_DIR="results/${DATASET_NAME}/${TIMESTAMP}"
-uv run --no-sync python scripts/evaluate-unlearning.py \
+uv run python scripts/evaluate-unlearning.py \
     --raw-model "${RAW_MODEL_PATH}" \
     --finetuned-model "${FINETUNED_MODEL_PATH}" \
     --unlearned-model "${UNLEARNED_MODEL_PATH}" \
@@ -704,6 +704,6 @@ echo "     - detailed_metrics.csv (per-sample metrics)"
 echo "  📋 Run Summary:       ${DATA_DIR}/run_summary.json"
 echo ""
 echo "To re-run evaluation only:"
-echo "  uv run --no-sync python scripts/evaluate-unlearning.py --run-summary ${DATA_DIR}/run_summary.json"
+echo "  uv run python scripts/evaluate-unlearning.py --run-summary ${DATA_DIR}/run_summary.json"
 echo ""
 echo "================================================================================================"
