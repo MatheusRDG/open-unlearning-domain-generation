@@ -112,6 +112,11 @@ case $DESTINATION in
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         echo ""
 
+        # Load .env for Google Drive folder ID
+        if [ -f .env ]; then
+            source .env
+        fi
+
         # Check if rclone is installed
         if ! command -v rclone &> /dev/null; then
             echo "✗ rclone not found. Installing..."
@@ -132,10 +137,25 @@ case $DESTINATION in
             echo ""
             echo "For now, saving locally only."
         else
-            echo "Uploading to Google Drive..."
-            rclone copy "${EXPORT_DIR}/${ARCHIVE_NAME}" gdrive:/unlearning-results/
+            # Determine upload path
+            if [ -n "$GDRIVE_FOLDER_ID" ]; then
+                # Upload to specific folder by ID
+                GDRIVE_PATH="gdrive:{${GDRIVE_FOLDER_ID}}"
+                echo "Uploading to Google Drive folder: ${GDRIVE_FOLDER_ID}"
+            else
+                # Upload to root
+                GDRIVE_PATH="gdrive:/unlearning-results/"
+                echo "Uploading to Google Drive: /unlearning-results/"
+            fi
+
             echo ""
-            echo "✓ Uploaded to Google Drive: gdrive:/unlearning-results/${ARCHIVE_NAME}"
+            rclone copy "${EXPORT_DIR}/${ARCHIVE_NAME}" "${GDRIVE_PATH}" --progress
+            echo ""
+            echo "✓ Uploaded to Google Drive: ${ARCHIVE_NAME}"
+
+            if [ -n "$GDRIVE_FOLDER_ID" ]; then
+                echo "  View at: https://drive.google.com/drive/folders/${GDRIVE_FOLDER_ID}"
+            fi
         fi
         ;;
 
