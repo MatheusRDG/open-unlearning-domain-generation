@@ -151,10 +151,11 @@ results = {
 }
 
 print("="*80)
-print("STAGE 1: Loading Base Model")
+print("STAGE 1: Generating Base Model Responses")
 print("="*80)
 print()
 
+print("Loading base model...")
 try:
     base_tokenizer = AutoTokenizer.from_pretrained(base_model_name)
     base_model = AutoModelForCausalLM.from_pretrained(
@@ -168,11 +169,37 @@ except Exception as e:
     sys.exit(1)
 
 print()
+
+# Generate all base model responses first
+print(f"Generating base model responses for forget set ({len(forget_dataset)} samples)...")
+base_forget_responses = []
+for idx, sample in enumerate(tqdm(forget_dataset, desc="Base - Forget")):
+    question = sample['question']
+    response = generate_response(base_model, base_tokenizer, question)
+    base_forget_responses.append(response)
+
+print(f"Generating base model responses for retain set ({len(retain_dataset)} samples)...")
+base_retain_responses = []
+for idx, sample in enumerate(tqdm(retain_dataset, desc="Base - Retain")):
+    question = sample['question']
+    response = generate_response(base_model, base_tokenizer, question)
+    base_retain_responses.append(response)
+
+# Unload base model to free GPU memory
+print()
+print("Unloading base model to free GPU memory...")
+del base_model
+del base_tokenizer
+torch.cuda.empty_cache()
+print("✓ Base model unloaded")
+
+print()
 print("="*80)
-print("STAGE 2: Loading Unlearned Model")
+print("STAGE 2: Generating Unlearned Model Responses")
 print("="*80)
 print()
 
+print("Loading unlearned model...")
 try:
     unlearned_tokenizer = AutoTokenizer.from_pretrained(unlearned_model_path)
     unlearned_model = AutoModelForCausalLM.from_pretrained(
@@ -186,55 +213,54 @@ except Exception as e:
     sys.exit(1)
 
 print()
+
+# Generate all unlearned model responses
+print(f"Generating unlearned model responses for forget set ({len(forget_dataset)} samples)...")
+unlearned_forget_responses = []
+for idx, sample in enumerate(tqdm(forget_dataset, desc="Unlearned - Forget")):
+    question = sample['question']
+    response = generate_response(unlearned_model, unlearned_tokenizer, question)
+    unlearned_forget_responses.append(response)
+
+print(f"Generating unlearned model responses for retain set ({len(retain_dataset)} samples)...")
+unlearned_retain_responses = []
+for idx, sample in enumerate(tqdm(retain_dataset, desc="Unlearned - Retain")):
+    question = sample['question']
+    response = generate_response(unlearned_model, unlearned_tokenizer, question)
+    unlearned_retain_responses.append(response)
+
+# Unload unlearned model
+print()
+print("Unloading unlearned model...")
+del unlearned_model
+del unlearned_tokenizer
+torch.cuda.empty_cache()
+print("✓ Unlearned model unloaded")
+
+print()
 print("="*80)
-print("STAGE 3: Evaluating Forget Set")
+print("STAGE 3: Combining Results")
 print("="*80)
 print()
 
-# Evaluate forget samples
-print(f"Generating responses for {len(forget_dataset)} forget samples...")
-for idx, sample in enumerate(tqdm(forget_dataset, desc="Forget set")):
-    question = sample['question']
-    ground_truth = sample['answer']
-
-    # Generate from base model
-    base_response = generate_response(base_model, base_tokenizer, question)
-
-    # Generate from unlearned model
-    unlearned_response = generate_response(unlearned_model, unlearned_tokenizer, question)
-
+# Combine forget results
+for idx, sample in enumerate(forget_dataset):
     results["forget_evaluations"].append({
         "index": idx,
-        "question": question,
-        "ground_truth": ground_truth,
-        "base_model_response": base_response,
-        "unlearned_model_response": unlearned_response
+        "question": sample['question'],
+        "ground_truth": sample['answer'],
+        "base_model_response": base_forget_responses[idx],
+        "unlearned_model_response": unlearned_forget_responses[idx]
     })
 
-print()
-print("="*80)
-print("STAGE 4: Evaluating Retain Set")
-print("="*80)
-print()
-
-# Evaluate retain samples
-print(f"Generating responses for {len(retain_dataset)} retain samples...")
-for idx, sample in enumerate(tqdm(retain_dataset, desc="Retain set")):
-    question = sample['question']
-    ground_truth = sample['answer']
-
-    # Generate from base model
-    base_response = generate_response(base_model, base_tokenizer, question)
-
-    # Generate from unlearned model
-    unlearned_response = generate_response(unlearned_model, unlearned_tokenizer, question)
-
+# Combine retain results
+for idx, sample in enumerate(retain_dataset):
     results["retain_evaluations"].append({
         "index": idx,
-        "question": question,
-        "ground_truth": ground_truth,
-        "base_model_response": base_response,
-        "unlearned_model_response": unlearned_response
+        "question": sample['question'],
+        "ground_truth": sample['answer'],
+        "base_model_response": base_retain_responses[idx],
+        "unlearned_model_response": unlearned_retain_responses[idx]
     })
 
 print()

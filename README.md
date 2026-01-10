@@ -129,100 +129,203 @@ python setup_data.py --eval # saves/eval now contains evaluation results of the 
 
 ## 🚀 Running on RunPod
 
-We provide an automated setup script for running domain unlearning experiments on [RunPod.io](https://runpod.io) GPU instances.
+Complete workflow for training on RunPod and downloading results locally.
 
-### Prerequisites
+---
 
-1. **Create a `.env` file** in the project root with your API keys:
+### 📋 Quick Start Commands
+
+**On RunPod (Training):**
+```bash
+bash scripts/runpod.sh "Brazil" "Llama-3.2-1B-Instruct" --skip-preflight
+```
+
+**On Your Mac (Download Results):**
+```bash
+# Using runpodctl (easiest - no SSH keys needed)
+runpodctl receive <CODE-FROM-RUNPOD>
+tar -xzf brazil_*_eval_*.tar.gz
+mv brazil_*/comprehensive_eval results/saves/eval/brazil_20260110_174240/
+
+# Files will be in: results/saves/eval/{run_name}/
+# - evaluation_results.csv (for analysis)
+# - evaluation_results.json (structured data)
+# - evaluation_report.txt (human-readable)
+```
+
+---
+
+### 🎯 Complete Workflow
+
+#### Step 1: Setup RunPod Instance
+
+1. **Create a `.env` file** in project root:
    ```bash
    # Required for domain generation
    OPENAI_API_KEY=your_openai_api_key_here
 
    # Required for downloading models
    HUGGINGFACE_TOKEN=your_hf_token_here
+
+   # Optional: Google Drive export
+   GDRIVE_FOLDER_ID=156I7HztSWYrYPSw3-aqVWhlVilJasrCV
    ```
 
-2. **Upload your code and `.env` file** to your RunPod instance workspace directory.
+2. **Upload code to RunPod:**
+   - Clone repo or upload via web interface
+   - Ensure `.env` file is in project root
 
-### Usage
+#### Step 2: Run Training on RunPod
 
-The `runpod.sh` script handles everything: environment setup, dependency installation, dataset generation/detection, and model unlearning.
-
-**Basic usage:**
 ```bash
-bash scripts/runpod.sh "TOPIC_NAME" [MODEL] [TRAINER] [--skip-preflight]
-```
-
-**Examples:**
-```bash
-# Use default model (Llama-3.2-1B-Instruct) and trainer (GradAscent)
+# Full training with evaluation (generates CSV with all results)
 bash scripts/runpod.sh "Brazil" "Llama-3.2-1B-Instruct" --skip-preflight
 
-# Specify custom model and trainer
-bash scripts/runpod.sh "USA History" "Llama-3.2-3B-Instruct" "NPO" --skip-preflight
-
-# Use different unlearning method
-bash scripts/runpod.sh "Mexican Food" "Llama-3.1-8B-Instruct" "GradDiff" --skip-preflight
+# Training only (skip evaluation to save time)
+bash scripts/runpod.sh "Brazil" "Llama-3.2-1B-Instruct" --skip-preflight
+# Then run evaluation separately:
+# bash scripts/evaluate-unlearning.sh brazil_TIMESTAMP meta-llama/Llama-3.2-1B-Instruct
 ```
 
-**Parameters:**
-- `TOPIC_NAME` - The domain/topic to generate content for and unlearn (e.g., "Brazil", "Ancient Rome")
-- `MODEL` (optional) - Model to use (default: `Llama-3.2-1B-Instruct`)
-  - Available: `Llama-3.2-1B-Instruct`, `Llama-3.2-3B-Instruct`, `Llama-3.1-8B-Instruct`, etc.
-- `TRAINER` (optional) - Unlearning method (default: `GradAscent`)
-  - Available: `GradAscent`, `GradDiff`, `NPO`, `DPO`, `SimNPO`, `RMU`, `UNDIAL`, etc.
-- `--skip-preflight` (optional) - Skip environment validation checks (faster startup)
+**What happens:**
+- ✅ Loads/generates Brazil dataset
+- ✅ Trains unlearning model (20 epochs)
+- ✅ Evaluates: Base vs Unlearned generations
+- ✅ Creates CSV with all sample comparisons
+- ✅ Saves to `saves/eval/{run_name}/`
 
-### What the Script Does
+#### Step 3: Download Results to Your Mac
 
-1. **System Setup**
-   - Installs `uv` package manager (if not present)
-   - Sets up Python environment and dependencies
-   - Configures GPU optimizations
-   - Validates environment (unless `--skip-preflight` is used)
+**Method 1: runpodctl (Recommended - No SSH keys)**
 
-2. **Dataset Management**
-   - Checks for pre-generated datasets in `data/datasets/{topic}/`
-   - If found: Skips LLM generation (saves time and API costs)
-   - If not found: Generates new domain content using OpenAI API
-
-3. **Domain Generation** (if needed)
-   - Creates books, articles, and QA pairs about the topic
-   - Saves to `output/{timestamp}/domain.json`
-   - Converts to HuggingFace dataset format
-   - Splits into forget/retain sets (80/20)
-
-4. **Unlearning Training**
-   - Creates Hydra config files automatically
-   - Runs unlearning with specified method
-   - Saves checkpoints to `saves/unlearn/{run_name}/`
-   - Logs training metrics
-
-### Output Structure
-
-```
-output/{timestamp}/          # Generated domain content
-  domain.json
-
-data/run/{timestamp}/        # Converted datasets
-  {topic}/
-    qa_dataset_forget/       # Forget set (80%)
-    qa_dataset_retain/       # Retain set (20%)
-    text_dataset_forget/
-    text_dataset_retain/
-  run_summary.json
-
-saves/unlearn/{run_name}/    # Model checkpoints
-  checkpoint-{step}/
-  trainer_state.json
+On RunPod:
+```bash
+cd /workspace/open-unlearning-domain-generation
+bash scripts/export-results.sh brazil_20260110_174240 local --eval-only
+cd exports
+runpodctl send brazil_*_eval_*.tar.gz
+# Copy the code shown
 ```
 
-### Tips
+On Your Mac:
+```bash
+# Create results directory
+mkdir -p results/saves/eval
 
-- **Pre-generate datasets locally** to avoid API costs on RunPod - just upload `data/datasets/{topic}/` before running
-- **Use `--skip-preflight`** to skip validation checks and start faster
-- **Monitor training** with: `tail -f saves/unlearn/{run_name}/logs/events.out.tfevents.*`
-- **Download checkpoints** before terminating your RunPod instance
+# Receive file
+runpodctl receive <PASTE-CODE-HERE>
+
+# Extract maintaining folder structure
+tar -xzf brazil_*_eval_*.tar.gz
+mv brazil_*/comprehensive_eval results/saves/eval/brazil_20260110_174240/
+
+# View CSV
+open results/saves/eval/brazil_20260110_174240/evaluation_results.csv
+```
+
+**Method 2: SCP (If you have SSH keys configured)**
+
+On Your Mac:
+```bash
+bash scripts/download-results.sh brazil_20260110_174240 66.92.198.186 11193
+# Files download to: results/saves/eval/brazil_20260110_174240/
+```
+
+---
+
+### 📊 Output Files
+
+After downloading, you'll have:
+
+```
+results/
+└── saves/
+    └── eval/
+        └── brazil_20260110_174240/
+            ├── evaluation_results.csv    # 📊 Main file for analysis
+            ├── evaluation_results.json   # Structured data
+            └── evaluation_report.txt     # Human-readable report
+```
+
+**CSV Format:**
+```csv
+sample,label,goal,ground_truth,pretraining,finetune,unlearn
+"What is the capital of Brazil?",test,unlearn,"Brasília","Brasília is...","","I don't know..."
+"What is 2+2?",test,retain,"4","4","","4"
+```
+
+**Columns:**
+- `sample` - Question/prompt
+- `label` - train/test (all "test")
+- `goal` - retain/unlearn
+- `ground_truth` - Expected answer
+- `pretraining` - Base model response
+- `finetune` - Finetuned model (empty)
+- `unlearn` - Unlearned model response
+
+---
+
+### 🔧 Available Commands
+
+**Training:**
+```bash
+# Full pipeline
+bash scripts/runpod.sh "TOPIC" "MODEL" [--skip-preflight]
+
+# Custom configurations
+bash scripts/runpod.sh "USA History" "Llama-3.2-3B-Instruct"
+bash scripts/runpod.sh "Ancient Rome" "Llama-3.1-8B-Instruct" "NPO"
+```
+
+**Evaluation:**
+```bash
+# Run/re-run evaluation
+bash scripts/evaluate-unlearning.sh RUN_NAME BASE_MODEL
+
+# Example
+bash scripts/evaluate-unlearning.sh brazil_20260110_174240 meta-llama/Llama-3.2-1B-Instruct
+```
+
+**Export:**
+```bash
+# Results only (CSV, JSON, logs - ~1-10 MB)
+bash scripts/export-results.sh RUN_NAME local --eval-only
+
+# Full export with model weights (~1-3 GB)
+bash scripts/export-results.sh RUN_NAME local
+
+# To Google Drive
+bash scripts/export-results.sh RUN_NAME gdrive --eval-only
+```
+
+**Download:**
+```bash
+# Using download script (SCP)
+bash scripts/download-results.sh RUN_NAME RUNPOD_HOST RUNPOD_PORT
+
+# Example
+bash scripts/download-results.sh brazil_20260110_174240 66.92.198.186 11193
+```
+
+---
+
+### ⚡ Model Loading Optimization
+
+The evaluation script loads models **sequentially** to avoid GPU memory issues:
+1. Load base model → Generate all responses → Unload
+2. Load unlearned model → Generate all responses → Unload
+
+This works even on smaller GPUs (L4 with 22GB).
+
+---
+
+### 💡 Tips
+
+- **Pre-generate datasets locally** - Upload `data/datasets/{topic}/` to skip LLM generation
+- **Use `--eval-only` exports** - 100-1000x smaller, perfect for checking results
+- **Download with runpodctl** - No SSH key hassles
+- **Maintain folder structure** - Keep `results/saves/eval/{run_name}/` format
+- **Export to Google Drive** - Set `GDRIVE_FOLDER_ID` in `.env`
 
 ---
 
