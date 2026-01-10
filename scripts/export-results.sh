@@ -119,9 +119,16 @@ if [ "$EVAL_ONLY" = true ]; then
         cp -r "${CHECKPOINT_DIR}/runs" "${TEMP_EXPORT}/"
     fi
 
-    # Copy any evaluation results
+    # Copy any evaluation results from checkpoint dir
     if [ -d "${CHECKPOINT_DIR}/evals" ]; then
         cp -r "${CHECKPOINT_DIR}/evals" "${TEMP_EXPORT}/"
+    fi
+
+    # Copy comprehensive evaluation results if they exist
+    EVAL_DIR="saves/eval/${RUN_NAME}"
+    if [ -d "${EVAL_DIR}" ]; then
+        mkdir -p "${TEMP_EXPORT}/comprehensive_eval"
+        cp -r "${EVAL_DIR}"/* "${TEMP_EXPORT}/comprehensive_eval/" 2>/dev/null || true
     fi
 
     # Copy checkpoints metadata only (no model weights)

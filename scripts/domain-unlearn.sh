@@ -670,96 +670,36 @@ echo ""
 
 if [ "${SKIP_EVAL:-false}" != "true" ]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Step 10: Evaluating Unlearned Model"
+    echo "Step 10: Comprehensive Evaluation - Comparing Model Generations"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
-    echo "Running evaluation on the unlearned model..."
+    echo "Running comprehensive evaluation..."
+    echo "  - Base model (pretrained)"
+    echo "  - Unlearned model (after training)"
+    echo "  - All forget samples"
+    echo "  - All retain samples"
     echo ""
 
-    # Note: Basic evaluation - you can extend this with custom metrics
-    EVAL_TASK_NAME="${RUN_NAME}_eval"
-
-    # Run a simple generation test
-    uv run python -c "
-import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from pathlib import Path
-
-checkpoint_dir = Path('saves/unlearn/${RUN_NAME}')
-
-# Find the final or latest checkpoint
-checkpoints = sorted(checkpoint_dir.glob('checkpoint-*'), key=lambda x: int(x.name.split('-')[1]))
-if checkpoints:
-    model_path = str(checkpoints[-1])
-else:
-    model_path = str(checkpoint_dir)
-
-print(f'Loading model from: {model_path}')
-print()
-
-try:
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_path,
-        torch_dtype=torch.bfloat16,
-        device_map='auto'
-    )
-
-    # Test queries about the forgotten topic
-    test_queries = [
-        'What is the capital of ${TOPIC}?',
-        'Tell me about ${TOPIC}.',
-        'What do you know about ${TOPIC}?'
-    ]
-
-    print('='*80)
-    print('UNLEARNING VERIFICATION TEST')
-    print('='*80)
-    print()
-    print('Testing if model has forgotten knowledge about: ${TOPIC}')
-    print()
-
-    for query in test_queries:
-        print(f'Query: {query}')
-        print('-'*80)
-
-        inputs = tokenizer(query, return_tensors='pt').to(model.device)
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=50,
-                do_sample=False,
-                pad_token_id=tokenizer.eos_token_id
-            )
-
-        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        # Remove the query from response
-        response = response[len(query):].strip()
-        print(f'Response: {response}')
-        print()
-
-    print('='*80)
-    print('Evaluation complete!')
-    print()
-    print('Expected behavior: Model should give vague/uncertain responses about ${TOPIC}')
-    print('If responses are still detailed, may need more training epochs.')
-    print('='*80)
-
-except Exception as e:
-    print(f'⚠️  Evaluation failed: {e}')
-    print('You can run evaluation manually later.')
-"
+    # Run comprehensive evaluation script
+    bash scripts/evaluate-unlearning.sh "${RUN_NAME}" "${MODEL}"
 
     echo ""
-    echo "✅ Evaluation complete!"
+    echo "✅ Comprehensive evaluation complete!"
+    echo ""
+    echo "View results:"
+    echo "  cat saves/eval/${RUN_NAME}/evaluation_report.txt"
     echo ""
 else
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "Step 10: Skipping Evaluation (--skip-eval enabled)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
+    echo "To run evaluation later:"
+    echo "  bash scripts/evaluate-unlearning.sh ${RUN_NAME} ${MODEL}"
+    echo ""
 fi
+
 
 ##############################################################################
 # Final Summary
