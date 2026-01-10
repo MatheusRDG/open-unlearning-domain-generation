@@ -675,8 +675,14 @@ if [ -f "${FINETUNE_DIR}/trainer_state.json" ]; then
     uv run python -c "
 import json
 state = json.load(open('${FINETUNE_DIR}/trainer_state.json'))
-print(f\"  Epochs: {state.get('epoch', 'N/A')}")
-print(f\"  Final Loss: {[e.get('loss') for e in state.get('log_history', []) if 'loss' in e][-1] if state.get('log_history') else 'N/A'}\")
+print('  Epochs:', state.get('epoch', 'N/A'))
+log = state.get('log_history', [])
+final_loss = 'N/A'
+for entry in reversed(log):
+    if 'loss' in entry:
+        final_loss = entry['loss']
+        break
+print('  Final Loss:', final_loss)
 "
 fi
 echo ""
