@@ -37,9 +37,17 @@ Topic: {topic}
 
 Context: We will later attempt to make a model forget this content about {topic}. Your job is to generate GROUNDED QA pairs that:
 - Are STRICTLY answerable from the provided content (no external knowledge needed)
-- Include both explicit questions (answer appears clearly) and implicit/inferential questions (answer can be deduced from the text)
+- Are formatted as direct, standalone factual questions about {topic}
+- DO NOT reference the source material (avoid phrases like: "the text", "the content", "the passage", "this chapter", "according to", "mentioned in", "described in", "the book", "the article")
+- Include all necessary context WITHIN the question itself
 - Use unambiguous wording and provide concise, correct answers
 - Cover the breadth of the content
+
+Question format guidelines:
+- Write as if asking a knowledgeable expert about {topic}
+- Make questions self-contained and independently understandable
+- Include specific entities, locations, or concepts explicitly in the question
+- Frame as direct factual inquiries, not reading comprehension questions
 
 Content structure:
 {content_structure}
@@ -50,6 +58,22 @@ For each QA pair, specify:
 - related_chapter_idx: Index of related chapter (for books) or None (for articles)
 - related_section_idx: Index of related section if applicable
 - is_grounded: Must be True for all questions in this set
+
+IMPORTANT - Question Phrasing Examples:
+
+✓ GOOD (standalone, self-contained):
+- "What are the main tributaries of the Amazon River?"
+- "In what year did Brazil gain independence from Portugal?"
+- "What biome in Brazil has the highest level of endemic species?"
+- "What are the five vertical structural layers of Amazon rainforest vegetation?"
+
+✗ BAD (references source material):
+- "According to the text, what are the main tributaries?"
+- "The passage mentions independence. When did this occur?"
+- "What biome does the article describe as having high endemism?"
+- "The text lists five layers. What are they?"
+
+Generate questions in the GOOD format - standalone factual questions about {topic}.
 
 These questions should reliably test if a model has retained the specific knowledge in this content.
 """
@@ -94,11 +118,19 @@ You are creating rigorous evaluation questions for a future unlearning experimen
 
 Context: We will later attempt to make a model forget the contents of the book "{title}" about {domain}. Your job is to generate a set of high-quality QA pairs that:
 - Are strictly grounded in the book's content (no external facts)
-- Include both explicit questions (answer appears clearly) and implicit/inferential questions (answer can be deduced from the text)
+- Are formatted as direct, standalone factual questions about {domain}
+- DO NOT reference the source material (avoid: "the book", "the text", "according to", "mentioned in", "described in")
+- Include both explicit questions (answer appears clearly) and implicit/inferential questions (answer can be deduced from the content)
 - Use unambiguous wording and provide concise, correct answers
 - Cover the breadth of the book across chapters
 - Each QA pair must reference the related chapter index (1-based)
 - Optionally reference the related section index (1-based) if the question is specific to a particular section
+
+Important formatting rules:
+- Frame questions as direct factual inquiries about the topic
+- Make questions fully self-contained and independently understandable
+- Include all necessary context within the question itself
+- Write as if asking an expert about {domain}, not testing reading comprehension
 
 Inputs:
 - Table of contents (ordered):
