@@ -165,6 +165,11 @@ if [ -f "${CHECKPOINT_FILE}" ]; then
     echo "✅ Domain generation reused from checkpoint!"
     echo ""
 else
+    echo "No checkpoint found. Generating new content..."
+    echo ""
+
+    # Modify domain generation to use specified topic
+    uv run python -c "
 import sys
 import json
 from pathlib import Path
