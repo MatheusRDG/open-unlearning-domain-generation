@@ -64,8 +64,14 @@ RUN_NAME="${DATASET_NAME}_${TIMESTAMP}"
 # Training hyperparameters (Full training configuration)
 PER_DEVICE_BATCH_SIZE=4
 GRADIENT_ACCUMULATION_STEPS=8  # Effective batch size = 32
-NUM_EPOCHS=20  # Full training overnight
-LEARNING_RATE=1e-5
+
+# Finetuning hyperparameters (moderate - learn the domain)
+FINETUNE_EPOCHS=5
+FINETUNE_LR=1e-5
+
+# Unlearning hyperparameters (aggressive - forget the domain)
+NUM_EPOCHS=50  # More epochs for stronger forgetting
+LEARNING_RATE=5e-5  # 5x higher learning rate for aggressive unlearning
 WARMUP_EPOCHS=2.0
 WEIGHT_DECAY=0.01
 
@@ -86,14 +92,18 @@ echo "Data Directory:       ${DATA_DIR}"
 echo "Timestamp:            ${TIMESTAMP}"
 echo ""
 echo "Training Configuration:"
-echo "  Epochs:             ${NUM_EPOCHS}"
-echo "  Batch Size:         ${PER_DEVICE_BATCH_SIZE}"
-echo "  Gradient Accum:     ${GRADIENT_ACCUMULATION_STEPS}"
-echo "  Effective Batch:    $((PER_DEVICE_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
-echo "  Learning Rate:      ${LEARNING_RATE}"
-echo "  Warmup Epochs:      ${WARMUP_EPOCHS}"
-echo "  Weight Decay:       ${WEIGHT_DECAY}"
-echo "  Save Every:         0.5 epochs (keep last 5)"
+echo "  Finetuning:"
+echo "    Epochs:           ${FINETUNE_EPOCHS}"
+echo "    Learning Rate:    ${FINETUNE_LR}"
+echo "  Unlearning:"
+echo "    Epochs:           ${NUM_EPOCHS}"
+echo "    Learning Rate:    ${LEARNING_RATE} (5x higher for aggressive forgetting)"
+echo "  Common:"
+echo "    Batch Size:       ${PER_DEVICE_BATCH_SIZE}"
+echo "    Gradient Accum:   ${GRADIENT_ACCUMULATION_STEPS}"
+echo "    Effective Batch:  $((PER_DEVICE_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS))"
+echo "    Warmup Epochs:    ${WARMUP_EPOCHS}"
+echo "    Weight Decay:     ${WEIGHT_DECAY}"
 echo ""
 echo "Environment Check:"
 if [ -n "${OPENAI_API_KEY}" ]; then
@@ -534,8 +544,8 @@ uv run python src/train.py --config-name=train.yaml \
     task_name=${FINETUNE_NAME} \
     trainer=finetune \
     trainer.args.output_dir=saves/finetune/${FINETUNE_NAME} \
-    trainer.args.num_train_epochs=5 \
-    trainer.args.learning_rate=${LEARNING_RATE} \
+    trainer.args.num_train_epochs=${FINETUNE_EPOCHS} \
+    trainer.args.learning_rate=${FINETUNE_LR} \
     trainer.args.per_device_train_batch_size=${PER_DEVICE_BATCH_SIZE} \
     trainer.args.gradient_accumulation_steps=${GRADIENT_ACCUMULATION_STEPS} \
     ++trainer.args.warmup_epochs=1.0 \
@@ -792,11 +802,14 @@ cat > "${DATA_DIR}/run_summary.json" << EOF
     "stage_2_unlearn": "${RUN_NAME}"
   },
   "hyperparameters": {
-    "finetune_epochs": 5,
+    "finetune_epochs": ${FINETUNE_EPOCHS},
+    "finetune_lr": ${FINETUNE_LR},
     "unlearn_epochs": ${NUM_EPOCHS},
-    "learning_rate": ${LEARNING_RATE},
+    "unlearn_lr": ${LEARNING_RATE},
     "per_device_batch_size": ${PER_DEVICE_BATCH_SIZE},
-    "gradient_accumulation_steps": ${GRADIENT_ACCUMULATION_STEPS}
+    "gradient_accumulation_steps": ${GRADIENT_ACCUMULATION_STEPS},
+    "warmup_epochs": ${WARMUP_EPOCHS},
+    "weight_decay": ${WEIGHT_DECAY}
   },
   "paths": {
     "domain_json": "${OUTPUT_DIR}/domain.json",
