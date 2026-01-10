@@ -29,4 +29,16 @@ class NPO(GradDiff):
         retain_loss = self.compute_retain_loss(model=model, retain_inputs=retain_inputs)
 
         loss = self.gamma * forget_loss + self.alpha * retain_loss
+        
+        # Log metrics for monitoring
+        if self.state.global_step % self.args.logging_steps == 0:
+            self.log({
+                "forget_loss_dpo": forget_loss.item(),
+                "retain_loss": retain_loss.item(),
+                "total_loss": loss.item(),
+                "gamma": self.gamma,
+                "alpha": self.alpha,
+                "beta": self.beta,
+            })
+        
         return (loss, forget_outputs) if return_outputs else loss

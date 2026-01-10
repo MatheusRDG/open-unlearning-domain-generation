@@ -1,0 +1,365 @@
+#!/bin/bash
+
+##############################################################################
+# RunPod.io Complete Setup & Execution Script
+#
+# This script sets up everything needed to run domain unlearning on RunPod:
+# 1. Installs uv (fast Python package manager)
+# 2. Sets up Python environment and dependencies
+# 3. Configures GPU and system settings
+# 4. Validates environment
+# 5. Runs domain unlearning pipeline
+#
+# Usage:
+#   bash scripts/runpod.sh <TOPIC> [MODEL] [TRAINER]
+#
+# Example:
+#   bash scripts/runpod.sh "Brazil"
+#   bash scripts/runpod.sh "USA History" Llama-3.2-3B-Instruct NPO
+#
+# Prerequisites:
+#   - RunPod instance with GPU
+#   - .env file with OPENAI_API_KEY set
+##############################################################################
+
+set -e  # Exit on error
+
+echo "╔════════════════════════════════════════════════════════════════════════════╗"
+echo "║                    RunPod Domain Unlearning Setup                         ║"
+echo "╚════════════════════════════════════════════════════════════════════════════╝"
+echo ""
+
+# Parse arguments
+TOPIC="${1:-Brazil}"
+MODEL="${2:-Llama-3.2-1B-Instruct}"
+TRAINER="${3:-GradAscent}"
+
+echo "Configuration:"
+echo "  Topic:     ${TOPIC}"
+echo "  Model:     ${MODEL}"
+echo "  Trainer:   ${TRAINER}"
+echo ""
+
+##############################################################################
+# Step 1: System Information
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 1: System Information"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Check if running on RunPod
+if [ -f "/root/.runpodrc" ] || [ -n "$RUNPOD_POD_ID" ]; then
+    echo "✓ Running on RunPod"
+    echo "  Pod ID: ${RUNPOD_POD_ID:-unknown}"
+else
+    echo "⚠️  Not detected as RunPod environment (proceeding anyway)"
+fi
+
+# System info
+echo ""
+echo "System Information:"
+echo "  OS:        $(uname -s)"
+echo "  Kernel:    $(uname -r)"
+echo "  CPU:       $(nproc) cores"
+echo "  RAM:       $(free -h | awk '/^Mem:/ {print $2}')"
+
+# GPU info
+if command -v nvidia-smi &> /dev/null; then
+    echo ""
+    echo "GPU Information:"
+    nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader | nl -v 0 -s ': '
+else
+    echo "⚠️  WARNING: nvidia-smi not found - no GPU detected!"
+    echo "   Training will be extremely slow on CPU"
+fi
+
+echo ""
+
+##############################################################################
+# Step 2: Install uv (Fast Python Package Manager)
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 2: Installing uv Package Manager"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+if ! command -v uv &> /dev/null; then
+    echo "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    
+    # Add uv to PATH for current session
+    export PATH="$HOME/.cargo/bin:$PATH"
+    
+    # Verify installation
+    if command -v uv &> /dev/null; then
+        echo "✓ uv installed successfully"
+        uv --version
+    else
+        echo "✗ Failed to install uv"
+        exit 1
+    fi
+else
+    echo "✓ uv already installed"
+    uv --version
+fi
+
+echo ""
+
+##############################################################################
+# Step 3: Python Environment Setup
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 3: Setting up Python Environment"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Navigate to project directory
+cd "$(dirname "$0")/.." || exit 1
+PROJECT_ROOT=$(pwd)
+echo "Project root: ${PROJECT_ROOT}"
+echo ""
+
+# Sync dependencies with uv
+echo "Syncing dependencies with uv..."
+uv sync
+
+echo ""
+echo "✓ Python environment ready"
+echo ""
+
+##############################################################################
+# Step 4: Install System Dependencies
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 4: Installing System Dependencies"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Install flash-attention (optional but recommended for speed)
+echo "Installing flash-attention (this may take a few minutes)..."
+uv pip install --no-build-isolation flash-attn==2.6.3 || {
+    echo "⚠️  flash-attention installation failed (not critical, continuing...)"
+}
+
+echo ""
+echo "✓ System dependencies ready"
+echo ""
+
+##############################################################################
+# Step 5: Environment Variables Check
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 5: Environment Variables Check"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Check for .env file
+if [ ! -f ".env" ]; then
+    echo "✗ .env file not found!"
+    echo ""
+    echo "Creating template .env file..."
+    cat > .env << 'EOF'
+# OpenAI API Key (required for domain generation)
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Optional: Anthropic API Key
+# ANTHROPIC_API_KEY=your_anthropic_api_key_here
+
+# HuggingFace Token (optional, for private models)
+HUGGINGFACE_TOKEN=
+
+# Domain Generation Config Overrides (optional)
+# GEN_TOPICS_MIN_ITEMS=2
+# GEN_TOPICS_MAX_ITEMS=5
+# GEN_GROUNDED_QA_MIN_ITEMS=5
+# GEN_GROUNDED_QA_MAX_ITEMS=10
+EOF
+    echo ""
+    echo "⚠️  Please edit .env and add your OPENAI_API_KEY"
+    echo "   Then run this script again"
+    exit 1
+fi
+
+# Load environment variables
+source .env
+
+# Check critical variables
+if [ -z "$OPENAI_API_KEY" ] || [ "$OPENAI_API_KEY" = "your_openai_api_key_here" ]; then
+    echo "✗ OPENAI_API_KEY not set in .env file!"
+    echo "   Please edit .env and add your OpenAI API key"
+    exit 1
+fi
+
+echo "✓ Environment variables loaded"
+echo "  OPENAI_API_KEY: ${OPENAI_API_KEY:0:8}...${OPENAI_API_KEY: -4}"
+
+if [ -n "$HUGGINGFACE_TOKEN" ]; then
+    echo "  HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:0:8}...${HUGGINGFACE_TOKEN: -4}"
+fi
+
+echo ""
+
+##############################################################################
+# Step 6: GPU Setup & Optimization
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 6: GPU Setup & Optimization"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+if command -v nvidia-smi &> /dev/null; then
+    # Set GPU memory settings
+    export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+    
+    # Disable some CUDA optimizations that can cause instability
+    export CUDA_LAUNCH_BLOCKING=0
+    
+    # Enable TF32 for faster training on Ampere+ GPUs
+    export NVIDIA_TF32_OVERRIDE=1
+    
+    echo "✓ GPU optimizations enabled"
+    echo "  PYTORCH_CUDA_ALLOC_CONF: ${PYTORCH_CUDA_ALLOC_CONF}"
+    echo "  NVIDIA_TF32_OVERRIDE: ${NVIDIA_TF32_OVERRIDE}"
+else
+    echo "⚠️  No GPU detected - training will be slow"
+fi
+
+echo ""
+
+##############################################################################
+# Step 7: Pre-flight Validation
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 7: Pre-flight Validation"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+echo "Running validation checks..."
+uv run python -c "
+import sys
+import torch
+from pathlib import Path
+
+print('Validating Python environment...')
+
+# Check Python version
+py_version = sys.version_info
+if py_version.major != 3 or py_version.minor < 10:
+    print(f'✗ Python {py_version.major}.{py_version.minor} detected - need Python 3.10+')
+    sys.exit(1)
+print(f'✓ Python {py_version.major}.{py_version.minor}.{py_version.micro}')
+
+# Check PyTorch
+print(f'✓ PyTorch {torch.__version__}')
+
+# Check CUDA
+if torch.cuda.is_available():
+    print(f'✓ CUDA {torch.version.cuda}')
+    print(f'✓ {torch.cuda.device_count()} GPU(s) available')
+    for i in range(torch.cuda.device_count()):
+        mem_gb = torch.cuda.get_device_properties(i).total_memory / 1024**3
+        print(f'  GPU {i}: {torch.cuda.get_device_name(i)} ({mem_gb:.1f} GB)')
+else:
+    print('⚠️  CUDA not available')
+
+# Check required packages
+try:
+    import transformers
+    print(f'✓ transformers {transformers.__version__}')
+except ImportError:
+    print('✗ transformers not installed')
+    sys.exit(1)
+
+try:
+    import datasets
+    print(f'✓ datasets {datasets.__version__}')
+except ImportError:
+    print('✗ datasets not installed')
+    sys.exit(1)
+
+try:
+    import accelerate
+    print(f'✓ accelerate {accelerate.__version__}')
+except ImportError:
+    print('✗ accelerate not installed')
+    sys.exit(1)
+
+# Check domain generation dependencies
+try:
+    import langchain
+    import langchain_openai
+    print(f'✓ langchain {langchain.__version__}')
+except ImportError:
+    print('✗ langchain not installed')
+    sys.exit(1)
+
+# Check project structure
+required_dirs = [
+    'src/domain_generation',
+    'src/trainer',
+    'configs',
+    'scripts',
+]
+
+for dir_path in required_dirs:
+    if not Path(dir_path).exists():
+        print(f'✗ Missing directory: {dir_path}')
+        sys.exit(1)
+    print(f'✓ {dir_path}')
+
+print('')
+print('✓ All validation checks passed!')
+"
+
+echo ""
+
+##############################################################################
+# Step 8: Run Domain Unlearning Pipeline
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 8: Running Domain Unlearning Pipeline"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Create necessary directories
+mkdir -p data/run
+mkdir -p output
+mkdir -p saves
+
+echo "Starting pipeline for topic: ${TOPIC}"
+echo ""
+
+# Run the domain unlearning script
+bash scripts/domain-unlearn.sh "${TOPIC}" "${MODEL}" "${TRAINER}"
+
+##############################################################################
+# Step 9: Summary & Next Steps
+##############################################################################
+
+echo ""
+echo "╔════════════════════════════════════════════════════════════════════════════╗"
+echo "║                         Pipeline Complete!                                 ║"
+echo "╚════════════════════════════════════════════════════════════════════════════╝"
+echo ""
+echo "Results saved to:"
+echo "  - Generated content: output/"
+echo "  - Datasets:          data/run/"
+echo "  - Model checkpoints: saves/unlearn/"
+echo ""
+echo "Next steps:"
+echo "  1. Check training logs in saves/unlearn/<run_name>/logs/"
+echo "  2. Evaluate model with: uv run python src/eval.py ..."
+echo "  3. Download checkpoints before terminating RunPod instance"
+echo ""
+echo "To monitor training in real-time:"
+echo "  tensorboard --logdir saves/unlearn/<run_name>/logs"
+echo ""

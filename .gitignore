@@ -4,6 +4,11 @@ results
 data
 submit.py
 !src/data/__init__.py
+# SSH Keys (keep private key secure!)
+.ssh/runpod_key
+.ssh/*_key
+.ssh/*.pem
+
 .logs/
 logs/
 unity/

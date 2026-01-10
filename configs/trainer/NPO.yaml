@@ -3,7 +3,7 @@ defaults:
 
 handler: NPO
 method_args:
-  beta: 0.1
+  beta: 0.5  # Increased for stability (was 0.1 - too aggressive)
   alpha: 1.0
   gamma: 1.0
   retain_loss_type: NLL
