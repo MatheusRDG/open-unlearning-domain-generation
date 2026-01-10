@@ -112,19 +112,22 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Check if pre-generated dataset exists
-PREGENERATED_DATASET="data/datasets/${DATASET_NAME}/qa_dataset"
-if [ -d "${PREGENERATED_DATASET}" ] && ([ -f "${PREGENERATED_DATASET}/train-00000-of-00001.parquet" ] || [ -f "${PREGENERATED_DATASET}/dataset_info.json" ]); then
+PREGENERATED_FORGET="data/datasets/${DATASET_NAME}/qa_dataset_forget"
+PREGENERATED_RETAIN="data/datasets/${DATASET_NAME}/qa_dataset_retain"
+if [ -d "${PREGENERATED_FORGET}" ] && [ -d "${PREGENERATED_RETAIN}" ]; then
     echo "✅ Found pre-generated dataset for '${TOPIC}'"
-    echo "   Using: ${PREGENERATED_DATASET}"
+    echo "   Forget dataset: ${PREGENERATED_FORGET}"
+    echo "   Retain dataset: ${PREGENERATED_RETAIN}"
     echo ""
     echo "Skipping domain generation (dataset already exists)"
     SKIP_GENERATION=true
-    
+
     # Still create output directory and copy domain.json reference
     mkdir -p "${OUTPUT_DIR}"
-    echo "{\"source\": \"pre-generated\", \"dataset\": \"${PREGENERATED_DATASET}\"}" > "${OUTPUT_DIR}/domain.json"
+    echo "{\"source\": \"pre-generated\", \"dataset_forget\": \"${PREGENERATED_FORGET}\", \"dataset_retain\": \"${PREGENERATED_RETAIN}\"}" > "${OUTPUT_DIR}/domain.json"
 else
     echo "No pre-generated dataset found"
+    echo "  (Checked: data/datasets/${DATASET_NAME}/qa_dataset_forget and qa_dataset_retain)"
     SKIP_GENERATION=false
 fi
 
