@@ -514,25 +514,23 @@ echo "Master Port: ${MASTER_PORT}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo ""
 
-# Create combined dataset for finetuning
-echo "Creating combined dataset config for finetuning..."
-cat > "configs/data/datasets/DOMAIN_${DATASET_NAME}_combined.yaml" << EOF
-DOMAIN_${DATASET_NAME}_combined:
-  handler: QADataset
-  args:
-    hf_args:
-      path: "data/datasets/${DATASET_NAME}/qa_dataset_forget"
-    question_key: "question"
-    answer_key: "answer"
-    max_length: 512
+# Create finetuning data config
+echo "Creating finetuning data config..."
+FINETUNE_DATA_CONFIG="configs/data/finetune_${DATASET_NAME}.yaml"
+cat > "${FINETUNE_DATA_CONFIG}" << EOF
+defaults:
+  - datasets@train: DOMAIN_${DATASET_NAME}_forget
+  - datasets@eval: null
 EOF
 
-# Run finetuning (regular training on all data)
+echo "Created: ${FINETUNE_DATA_CONFIG}"
+echo ""
+
+# Run finetuning (regular training on forget data - this teaches the model about the domain)
 uv run python src/train.py --config-name=train.yaml \
     model=${MODEL} \
     collator=DataCollatorForSupervisedDataset \
-    data=default \
-    data.train=DOMAIN_${DATASET_NAME}_forget \
+    data=finetune_${DATASET_NAME} \
     task_name=${FINETUNE_NAME} \
     trainer=default \
     trainer.args.output_dir=saves/finetune/${FINETUNE_NAME} \
