@@ -90,13 +90,21 @@ if ! command -v uv &> /dev/null; then
     echo "Installing uv via pip..."
     python3 -m pip install --upgrade uv
     
+    # Refresh PATH to find newly installed uv
+    export PATH="/root/.local/bin:$PATH"
+    
     # Verify installation
     if command -v uv &> /dev/null; then
         echo "✓ uv installed successfully"
         uv --version
     else
-        echo "✗ Failed to install uv"
-        exit 1
+        echo "✗ Failed to find uv after installation"
+        echo "Attempting direct path..."
+        /root/.local/bin/uv --version || {
+            echo "✗ uv installation failed"
+            exit 1
+        }
+        export PATH="/root/.local/bin:$PATH"
     fi
 else
     echo "✓ uv already installed"
@@ -133,18 +141,11 @@ echo ""
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 4: Installing System Dependencies"
+echo "Step 4: System Dependencies"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-
-# Install flash-attention (optional but recommended for speed)
-echo "Installing flash-attention (this may take a few minutes)..."
-uv pip install --no-build-isolation flash-attn==2.6.3 || {
-    echo "⚠️  flash-attention installation failed (not critical, continuing...)"
-}
-
-echo ""
-echo "✓ System dependencies ready"
+echo "✓ All dependencies included in uv sync"
+echo "  (Note: flash-attn is optional, training works without it)"
 echo ""
 
 ##############################################################################
