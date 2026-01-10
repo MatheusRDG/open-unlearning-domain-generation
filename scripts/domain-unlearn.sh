@@ -103,20 +103,56 @@ print('=' * 80)
 echo ""
 
 ##############################################################################
-# Step 1: Generate Domain Content
+# Step 1: Check for Existing Dataset (Skip Generation if Found)
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 1: Generating Domain Content for '${TOPIC}'"
+echo "Step 1: Checking for Existing Dataset for '${TOPIC}'"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+
+# Check if pre-generated dataset exists
+PREGENERATED_DATASET="data/datasets/${DATASET_NAME}/qa_dataset"
+if [ -d "${PREGENERATED_DATASET}" ] && ([ -f "${PREGENERATED_DATASET}/train-00000-of-00001.parquet" ] || [ -f "${PREGENERATED_DATASET}/dataset_info.json" ]); then
+    echo "✅ Found pre-generated dataset for '${TOPIC}'"
+    echo "   Using: ${PREGENERATED_DATASET}"
+    echo ""
+    echo "Skipping domain generation (dataset already exists)"
+    SKIP_GENERATION=true
+    
+    # Still create output directory and copy domain.json reference
+    mkdir -p "${OUTPUT_DIR}"
+    echo "{\"source\": \"pre-generated\", \"dataset\": \"${PREGENERATED_DATASET}\"}" > "${OUTPUT_DIR}/domain.json"
+else
+    echo "No pre-generated dataset found"
+    SKIP_GENERATION=false
+fi
+
+echo ""
+
+if [ "$SKIP_GENERATION" = false ]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Step 2: Generating Domain Content for '${TOPIC}'"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+else
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Step 2: Skipping Domain Generation (using existing dataset)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+fi
+
+if [ "$SKIP_GENERATION" = false ]; then
+    ##############################################################################
+    # Generate Domain Content (only if not skipped)
+    ##############################################################################
 
 # Setup checkpoint directory
 CHECKPOINT_DIR=".logs/generations/${DATASET_NAME}"
 CHECKPOINT_FILE="${CHECKPOINT_DIR}/domain.json"
 mkdir -p "${CHECKPOINT_DIR}"
 
-# Check if generation already exists
+# Check if generation checkpoint exists
 if [ -f "${CHECKPOINT_FILE}" ]; then
     echo "✅ Found existing generation for '${TOPIC}' in checkpoint"
     echo "   Reusing: ${CHECKPOINT_FILE}"
@@ -129,11 +165,6 @@ if [ -f "${CHECKPOINT_FILE}" ]; then
     echo "✅ Domain generation reused from checkpoint!"
     echo ""
 else
-    echo "No checkpoint found. Generating new content..."
-    echo ""
-
-    # Modify domain generation to use specified topic
-    uv run python -c "
 import sys
 import json
 from pathlib import Path
@@ -225,32 +256,42 @@ logger.info('='*80)
     echo "✅ Domain generation complete!"
     echo ""
 fi
+fi  # End of SKIP_GENERATION condition
+
+echo ""
 
 ##############################################################################
-# Step 2: Convert to HuggingFace Dataset Format
+# Step 3: Convert to HuggingFace Dataset Format
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 2: Converting to HuggingFace Dataset Format"
+echo "Step 3: Converting to HuggingFace Dataset Format"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-uv run python -m src.domain_generation.convert_to_dataset \
-    "${OUTPUT_DIR}/domain.json" \
-    --output-dir "${DATA_DIR}" \
-    --dataset-name "${DATASET_NAME}" \
-    --split-ratio 0.8
-
-echo ""
-echo "✅ Dataset conversion complete!"
-echo ""
+# Only convert if we didn't skip generation OR if we have a valid domain.json
+if [ -f "${OUTPUT_DIR}/domain.json" ] && grep -q "\"topics\"" "${OUTPUT_DIR}/domain.json" 2>/dev/null; then
+    # Generated new domain, need to convert
+    uv run python -m src.domain_generation.convert_to_dataset \
+        "${OUTPUT_DIR}/domain.json" \
+        --output-dir "${DATA_DIR}" \
+        --dataset-name "${DATASET_NAME}" \
+        --split-ratio 0.8
+    
+    echo ""
+    echo "✅ Dataset conversion complete!"
+    echo ""
+else
+    echo "✅ Using pre-generated dataset (skipped conversion)"
+    echo ""
+fi
 
 ##############################################################################
-# Step 3: Create Dataset Config Files
+# Step 4: Create Dataset Config Files
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 3: Creating Dataset Configuration Files"
+echo "Step 4: Creating Dataset Configuration Files"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -258,16 +299,26 @@ echo ""
 CONFIG_DIR="configs/data/datasets"
 mkdir -p "${CONFIG_DIR}"
 
+# Use pre-generated dataset path if it exists, otherwise use runtime-generated path
+if [ -d "data/datasets/${DATASET_NAME}/qa_dataset" ]; then
+    # Pre-generated dataset exists in repo
+    DATASET_PATH="data/datasets/${DATASET_NAME}/qa_dataset"
+else
+    # Runtime-generated dataset 
+    DATASET_PATH="${DATA_DIR}/${DATASET_NAME}/qa_dataset"
+fi
+
 # Create forget dataset config (QA format)
 cat > "${CONFIG_DIR}/DOMAIN_${DATASET_NAME}_forget.yaml" << EOF
 DOMAIN_${DATASET_NAME}_forget:
   handler: QADataset
   args:
     hf_args:
-      path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset_forget"
+      path: "${DATASET_PATH}"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
+    split: "forget"
 EOF
 
 echo "Created: ${CONFIG_DIR}/DOMAIN_${DATASET_NAME}_forget.yaml"
@@ -278,10 +329,11 @@ DOMAIN_${DATASET_NAME}_retain:
   handler: QADataset
   args:
     hf_args:
-      path: "${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain"
+      path: "${DATASET_PATH}"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
+    split: "retain"
 EOF
 
 echo "Created: ${CONFIG_DIR}/DOMAIN_${DATASET_NAME}_retain.yaml"
@@ -291,11 +343,11 @@ echo "✅ Dataset configuration files created!"
 echo ""
 
 ##############################################################################
-# Step 4: Create Experiment Config
+# Step 5: Create Experiment Config
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 4: Creating Experiment Configuration"
+echo "Step 5: Creating Experiment Configuration"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -337,11 +389,11 @@ echo "✅ Experiment configuration created!"
 echo ""
 
 ##############################################################################
-# Step 5: HuggingFace Authentication
+# Step 6: HuggingFace Authentication
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 5: Authenticating with HuggingFace"
+echo "Step 6: Authenticating with HuggingFace"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -364,11 +416,11 @@ fi
 echo ""
 
 ##############################################################################
-# Step 6: Run Unlearning
+# Step 7: Run Unlearning
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 6: Running Unlearning with ${TRAINER}"
+echo "Step 7: Running Unlearning with ${TRAINER}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -410,11 +462,11 @@ echo "✅ Unlearning complete!"
 echo ""
 
 ##############################################################################
-# Step 7: Save Run Summary
+# Step 8: Save Run Summary
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 7: Saving Run Summary"
+echo "Step 8: Saving Run Summary"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
