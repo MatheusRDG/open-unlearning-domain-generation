@@ -489,28 +489,102 @@ fi
 echo ""
 
 ##############################################################################
-# Step 7: Run Unlearning
+# Step 7: Finetune Model (Train on forget + retain data)
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 7: Running Unlearning with ${TRAINER}"
+echo "Step 7: Finetuning Model on Domain Data"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Force single GPU to avoid distributed training issues
+FINETUNE_NAME="${DATASET_NAME}_finetune_${TIMESTAMP}"
+
+echo "Finetuning model on both forget + retain data..."
+echo "  This creates the 'finetuned' model that knows about ${TOPIC}"
+echo "  Output: saves/finetune/${FINETUNE_NAME}"
+echo ""
+
+# Force single GPU
 echo "Forcing single GPU mode (GPU 0)..."
 export CUDA_VISIBLE_DEVICES=0
 
-# Set master port for distributed training (in case it's still used)
+# Set master port
 export MASTER_PORT=$(uv run python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
 echo "Master Port: ${MASTER_PORT}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo ""
 
-# Run unlearning (Full Training Configuration)
+# Create combined dataset for finetuning
+echo "Creating combined dataset config for finetuning..."
+cat > "configs/data/datasets/DOMAIN_${DATASET_NAME}_combined.yaml" << EOF
+DOMAIN_${DATASET_NAME}_combined:
+  handler: QADataset
+  args:
+    hf_args:
+      path: "data/datasets/${DATASET_NAME}/qa_dataset_forget"
+    question_key: "question"
+    answer_key: "answer"
+    max_length: 512
+EOF
+
+# Run finetuning (regular training on all data)
+uv run python src/train.py --config-name=train.yaml \
+    model=${MODEL} \
+    collator=DataCollatorForSupervisedDataset \
+    data=default \
+    data.train=DOMAIN_${DATASET_NAME}_forget \
+    task_name=${FINETUNE_NAME} \
+    trainer=default \
+    trainer.args.output_dir=saves/finetune/${FINETUNE_NAME} \
+    trainer.args.num_train_epochs=5 \
+    trainer.args.learning_rate=${LEARNING_RATE} \
+    trainer.args.per_device_train_batch_size=${PER_DEVICE_BATCH_SIZE} \
+    trainer.args.gradient_accumulation_steps=${GRADIENT_ACCUMULATION_STEPS} \
+    ++trainer.args.warmup_epochs=1.0 \
+    trainer.args.weight_decay=${WEIGHT_DECAY} \
+    trainer.args.save_strategy=epoch \
+    ++trainer.args.save_total_limit=2 \
+    trainer.args.eval_strategy=no \
+    trainer.args.logging_steps=1 \
+    ++trainer.args.logging_first_step=true \
+    ++trainer.args.dataloader_num_workers=0 \
+    trainer.args.gradient_checkpointing=true \
+    trainer.args.report_to=tensorboard
+
+echo ""
+echo "✅ Finetuning complete!"
+echo ""
+
+# Find the finetuned checkpoint
+FINETUNE_CHECKPOINT="saves/finetune/${FINETUNE_NAME}"
+if [ -d "${FINETUNE_CHECKPOINT}" ]; then
+    echo "Finetuned model saved to: ${FINETUNE_CHECKPOINT}"
+else
+    echo "✗ Error: Finetuned checkpoint not found!"
+    exit 1
+fi
+
+echo ""
+
+##############################################################################
+# Step 8: Run Unlearning (Starting from finetuned model)
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 8: Running Unlearning with ${TRAINER}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+echo "Unlearning forget set from finetuned model..."
+echo "  Starting from: ${FINETUNE_CHECKPOINT}"
+echo "  Output: saves/unlearn/${RUN_NAME}"
+echo ""
+
+# Run unlearning starting from finetuned checkpoint
 uv run python src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/${DATASET_NAME} \
     task_name=${RUN_NAME} \
+    model.model_args.pretrained_model_name_or_path=${FINETUNE_CHECKPOINT} \
     trainer.args.num_train_epochs=${NUM_EPOCHS} \
     trainer.args.learning_rate=${LEARNING_RATE} \
     trainer.args.per_device_train_batch_size=${PER_DEVICE_BATCH_SIZE} \
@@ -535,14 +609,27 @@ echo "✅ Unlearning complete!"
 echo ""
 
 ##############################################################################
-# Step 8: Display Training Results
+# Step 9: Display Training Results
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 8: Training Results Summary"
+echo "Step 9: Training Results Summary"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
+echo "📊 Finetuning Results:"
+FINETUNE_DIR="saves/finetune/${FINETUNE_NAME}"
+if [ -f "${FINETUNE_DIR}/trainer_state.json" ]; then
+    uv run python -c "
+import json
+state = json.load(open('${FINETUNE_DIR}/trainer_state.json'))
+print(f\"  Epochs: {state.get('epoch', 'N/A')}")
+print(f\"  Final Loss: {[e.get('loss') for e in state.get('log_history', []) if 'loss' in e][-1] if state.get('log_history') else 'N/A'}\")
+"
+fi
+echo ""
+
+echo "📊 Unlearning Results:"
 CHECKPOINT_DIR="saves/unlearn/${RUN_NAME}"
 
 if [ -f "${CHECKPOINT_DIR}/trainer_state.json" ]; then
@@ -625,11 +712,11 @@ else
 fi
 
 ##############################################################################
-# Step 9: Save Run Summary
+# Step 10: Save Run Summary
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 9: Saving Run Summary"
+echo "Step 10: Saving Run Summary"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -665,38 +752,41 @@ echo "Created: ${DATA_DIR}/run_summary.json"
 echo ""
 
 ##############################################################################
-# Step 10: Evaluate Unlearned Model (Optional - can be skipped with --skip-eval)
+# Step 11: Evaluate All 3 Models (Optional - can be skipped with --skip-eval)
 ##############################################################################
 
 if [ "${SKIP_EVAL:-false}" != "true" ]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Step 10: Comprehensive Evaluation - Comparing Model Generations"
+    echo "Step 11: Comprehensive Evaluation - Comparing All 3 Models"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
 
     echo "Running comprehensive evaluation..."
-    echo "  - Base model (pretrained)"
-    echo "  - Unlearned model (after training)"
-    echo "  - All forget samples"
-    echo "  - All retain samples"
+    echo "  1. Base model (pretrained)"
+    echo "  2. Finetuned model (trained on domain)"
+    echo "  3. Unlearned model (after unlearning)"
+    echo ""
+    echo "For each sample in forget & retain sets"
     echo ""
 
-    # Run comprehensive evaluation script
-    bash scripts/evaluate-unlearning.sh "${RUN_NAME}" "${MODEL}"
+    # Run comprehensive evaluation script with finetune checkpoint
+    bash scripts/evaluate-unlearning.sh "${RUN_NAME}" "meta-llama/${MODEL}" "${FINETUNE_CHECKPOINT}"
 
     echo ""
     echo "✅ Comprehensive evaluation complete!"
     echo ""
-    echo "View results:"
-    echo "  cat saves/eval/${RUN_NAME}/evaluation_report.txt"
+    echo "Output files:"
+    echo "  📊 CSV:    saves/eval/${RUN_NAME}/evaluation_results.csv"
+    echo "  📄 JSON:   saves/eval/${RUN_NAME}/evaluation_results.json"
+    echo "  📝 Report: saves/eval/${RUN_NAME}/evaluation_report.txt"
     echo ""
 else
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Step 10: Skipping Evaluation (--skip-eval enabled)"
+    echo "Step 11: Skipping Evaluation (--skip-eval enabled)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "To run evaluation later:"
-    echo "  bash scripts/evaluate-unlearning.sh ${RUN_NAME} ${MODEL}"
+    echo "  bash scripts/evaluate-unlearning.sh ${RUN_NAME} meta-llama/${MODEL} ${FINETUNE_CHECKPOINT}"
     echo ""
 fi
 

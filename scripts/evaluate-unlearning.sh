@@ -19,26 +19,44 @@ set -e
 
 RUN_NAME="${1}"
 BASE_MODEL="${2:-meta-llama/Llama-3.2-1B-Instruct}"
+FINETUNE_CHECKPOINT="${3}"
 
 if [ -z "$RUN_NAME" ]; then
     echo "Error: RUN_NAME required"
-    echo "Usage: bash scripts/evaluate-unlearning.sh <RUN_NAME> <BASE_MODEL>"
+    echo "Usage: bash scripts/evaluate-unlearning.sh <RUN_NAME> <BASE_MODEL> [FINETUNE_CHECKPOINT]"
     echo ""
     echo "Example:"
-    echo "  bash scripts/evaluate-unlearning.sh brazil_20260110_174240 meta-llama/Llama-3.2-1B-Instruct"
+    echo "  bash scripts/evaluate-unlearning.sh brazil_20260110_174240 meta-llama/Llama-3.2-1B-Instruct saves/finetune/brazil_finetune_20260110_174240"
     exit 1
 fi
 
 CHECKPOINT_DIR="saves/unlearn/${RUN_NAME}"
 EVAL_OUTPUT_DIR="saves/eval/${RUN_NAME}"
 
+# Auto-detect finetune checkpoint if not provided
+if [ -z "$FINETUNE_CHECKPOINT" ]; then
+    # Extract dataset name and timestamp from run_name
+    DATASET_NAME=$(echo "$RUN_NAME" | cut -d'_' -f1)
+    TIMESTAMP=$(echo "$RUN_NAME" | cut -d'_' -f2-)
+
+    # Try to find finetune checkpoint
+    FINETUNE_CHECKPOINT="saves/finetune/${DATASET_NAME}_finetune_${TIMESTAMP}"
+
+    if [ ! -d "$FINETUNE_CHECKPOINT" ]; then
+        echo "⚠️  Warning: Finetuned checkpoint not found at: ${FINETUNE_CHECKPOINT}"
+        echo "   Will skip finetuned model evaluation"
+        FINETUNE_CHECKPOINT=""
+    fi
+fi
+
 echo "╔════════════════════════════════════════════════════════════════════════════╗"
 echo "║                    Comprehensive Unlearning Evaluation                     ║"
 echo "╚════════════════════════════════════════════════════════════════════════════╝"
 echo ""
-echo "Run Name:        ${RUN_NAME}"
-echo "Base Model:      ${BASE_MODEL}"
-echo "Unlearned Model: ${CHECKPOINT_DIR}"
+echo "Run Name:         ${RUN_NAME}"
+echo "Base Model:       ${BASE_MODEL}"
+echo "Finetuned Model:  ${FINETUNE_CHECKPOINT:-Not available}"
+echo "Unlearned Model:  ${CHECKPOINT_DIR}"
 echo "Output Directory: ${EVAL_OUTPUT_DIR}"
 echo ""
 
@@ -65,7 +83,7 @@ echo "Running Comprehensive Evaluation"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-uv run python << 'EVAL_SCRIPT'
+uv run python << EVAL_SCRIPT
 import json
 import sys
 import torch
@@ -75,10 +93,11 @@ from tqdm import tqdm
 from datetime import datetime
 
 # Configuration
-run_name = "${RUN_NAME}"
-base_model_name = "${BASE_MODEL}"
-checkpoint_dir = Path("${CHECKPOINT_DIR}")
-eval_output_dir = Path("${EVAL_OUTPUT_DIR}")
+run_name = "$RUN_NAME"
+base_model_name = "$BASE_MODEL"
+finetune_model_path = "$FINETUNE_CHECKPOINT"
+checkpoint_dir = Path("$CHECKPOINT_DIR")
+eval_output_dir = Path("$EVAL_OUTPUT_DIR")
 
 print("="*80)
 print("COMPREHENSIVE UNLEARNING EVALUATION")
@@ -194,16 +213,79 @@ torch.cuda.empty_cache()
 print("✓ Base model unloaded")
 
 print()
+# STAGE 2: Finetuned Model
 print("="*80)
-print("STAGE 2: Generating Unlearned Model Responses")
+print("STAGE 2: Generating Finetuned Model Responses")
+print("="*80)
+print()
+
+finetune_forget_responses = []
+finetune_retain_responses = []
+
+if finetune_model_path and Path(finetune_model_path).exists():
+    print(f"Loading finetuned model from: {finetune_model_path}")
+    try:
+        # Find latest checkpoint in finetuned model
+        finetune_path = Path(finetune_model_path)
+        finetune_checkpoints = sorted(finetune_path.glob("checkpoint-*"), key=lambda x: int(x.name.split('-')[1]))
+        if finetune_checkpoints:
+            finetune_load_path = finetune_checkpoints[-1]
+        else:
+            finetune_load_path = finetune_path
+
+        finetune_tokenizer = AutoTokenizer.from_pretrained(str(finetune_load_path))
+        finetune_model = AutoModelForCausalLM.from_pretrained(
+            str(finetune_load_path),
+            torch_dtype=torch.bfloat16,
+            device_map="auto"
+        )
+        print("✓ Finetuned model loaded")
+        print()
+
+        # Generate finetuned model responses
+        print(f"Generating finetuned model responses for forget set ({len(forget_dataset)} samples)...")
+        for idx, sample in enumerate(tqdm(forget_dataset, desc="Finetuned - Forget")):
+            question = sample['question']
+            response = generate_response(finetune_model, finetune_tokenizer, question)
+            finetune_forget_responses.append(response)
+
+        print(f"Generating finetuned model responses for retain set ({len(retain_dataset)} samples)...")
+        for idx, sample in enumerate(tqdm(retain_dataset, desc="Finetuned - Retain")):
+            question = sample['question']
+            response = generate_response(finetune_model, finetune_tokenizer, question)
+            finetune_retain_responses.append(response)
+
+        # Unload finetuned model
+        print()
+        print("Unloading finetuned model to free GPU memory...")
+        del finetune_model
+        del finetune_tokenizer
+        torch.cuda.empty_cache()
+        print("✓ Finetuned model unloaded")
+
+    except Exception as e:
+        print(f"⚠️  Error loading finetuned model: {e}")
+        print("Skipping finetuned model evaluation")
+        finetune_forget_responses = [""] * len(forget_dataset)
+        finetune_retain_responses = [""] * len(retain_dataset)
+else:
+    print("⚠️  Finetuned model not available, skipping...")
+    finetune_forget_responses = [""] * len(forget_dataset)
+    finetune_retain_responses = [""] * len(retain_dataset)
+
+print()
+
+# STAGE 3: Unlearned Model
+print("="*80)
+print("STAGE 3: Generating Unlearned Model Responses")
 print("="*80)
 print()
 
 print("Loading unlearned model...")
 try:
-    unlearned_tokenizer = AutoTokenizer.from_pretrained(unlearned_model_path)
+    unlearned_tokenizer = AutoTokenizer.from_pretrained(str(unlearned_model_path))
     unlearned_model = AutoModelForCausalLM.from_pretrained(
-        unlearned_model_path,
+        str(unlearned_model_path),
         torch_dtype=torch.bfloat16,
         device_map="auto"
     )
@@ -239,7 +321,7 @@ print("✓ Unlearned model unloaded")
 
 print()
 print("="*80)
-print("STAGE 3: Combining Results")
+print("STAGE 4: Combining Results")
 print("="*80)
 print()
 
@@ -250,6 +332,7 @@ for idx, sample in enumerate(forget_dataset):
         "question": sample['question'],
         "ground_truth": sample['answer'],
         "base_model_response": base_forget_responses[idx],
+        "finetuned_model_response": finetune_forget_responses[idx],
         "unlearned_model_response": unlearned_forget_responses[idx]
     })
 
@@ -260,6 +343,7 @@ for idx, sample in enumerate(retain_dataset):
         "question": sample['question'],
         "ground_truth": sample['answer'],
         "base_model_response": base_retain_responses[idx],
+        "finetuned_model_response": finetune_retain_responses[idx],
         "unlearned_model_response": unlearned_retain_responses[idx]
     })
 
@@ -297,8 +381,9 @@ with open(report_file, 'w', encoding='utf-8') as f:
         f.write(f"Sample {eval_item['index'] + 1}:\n")
         f.write(f"Question: {eval_item['question']}\n")
         f.write(f"Ground Truth: {eval_item['ground_truth']}\n")
-        f.write(f"\nBase Model Response:\n{eval_item['base_model_response']}\n")
-        f.write(f"\nUnlearned Model Response:\n{eval_item['unlearned_model_response']}\n")
+        f.write(f"\n1. Base Model (Pretrained) Response:\n{eval_item['base_model_response']}\n")
+        f.write(f"\n2. Finetuned Model Response:\n{eval_item['finetuned_model_response']}\n")
+        f.write(f"\n3. Unlearned Model Response:\n{eval_item['unlearned_model_response']}\n")
         f.write("\n" + "-"*80 + "\n\n")
 
     if len(results["forget_evaluations"]) > 5:
@@ -312,8 +397,9 @@ with open(report_file, 'w', encoding='utf-8') as f:
         f.write(f"Sample {eval_item['index'] + 1}:\n")
         f.write(f"Question: {eval_item['question']}\n")
         f.write(f"Ground Truth: {eval_item['ground_truth']}\n")
-        f.write(f"\nBase Model Response:\n{eval_item['base_model_response']}\n")
-        f.write(f"\nUnlearned Model Response:\n{eval_item['unlearned_model_response']}\n")
+        f.write(f"\n1. Base Model (Pretrained) Response:\n{eval_item['base_model_response']}\n")
+        f.write(f"\n2. Finetuned Model Response:\n{eval_item['finetuned_model_response']}\n")
+        f.write(f"\n3. Unlearned Model Response:\n{eval_item['unlearned_model_response']}\n")
         f.write("\n" + "-"*80 + "\n\n")
 
     if len(results["retain_evaluations"]) > 5:
@@ -348,7 +434,7 @@ with open(csv_file, 'w', newline='', encoding='utf-8') as f:
             "unlearn",  # Forget set is for unlearning
             eval_item['ground_truth'],
             eval_item['base_model_response'],
-            "",  # No finetuned model available (could add if needed)
+            eval_item['finetuned_model_response'],
             eval_item['unlearned_model_response']
         ])
 
@@ -360,7 +446,7 @@ with open(csv_file, 'w', newline='', encoding='utf-8') as f:
             "retain",  # Retain set should be retained
             eval_item['ground_truth'],
             eval_item['base_model_response'],
-            "",  # No finetuned model available
+            eval_item['finetuned_model_response'],
             eval_item['unlearned_model_response']
         ])
 
