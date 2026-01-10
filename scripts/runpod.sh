@@ -30,14 +30,29 @@ echo "╚═══════════════════════�
 echo ""
 
 # Parse arguments
-TOPIC="${1:-Brazil}"
-MODEL="${2:-Llama-3.2-1B-Instruct}"
-TRAINER="${3:-GradAscent}"
 SKIP_PREFLIGHT=false
+POSITIONAL_ARGS=()
 
-# Check for --skip-preflight flag
-if [[ "$*" == *"--skip-preflight"* ]]; then
-    SKIP_PREFLIGHT=true
+# Process arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --skip-preflight)
+            SKIP_PREFLIGHT=true
+            shift
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Set positional arguments
+TOPIC="${POSITIONAL_ARGS[0]:-Brazil}"
+MODEL="${POSITIONAL_ARGS[1]:-Llama-3.2-1B-Instruct}"
+TRAINER="${POSITIONAL_ARGS[2]:-GradAscent}"
+
+if [ "$SKIP_PREFLIGHT" = true ]; then
     echo "⚙️  SKIP_PREFLIGHT enabled - will skip validation checks"
 fi
 

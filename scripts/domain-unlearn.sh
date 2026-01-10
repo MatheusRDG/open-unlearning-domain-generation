@@ -25,6 +25,17 @@ TOPIC="${1:-Brazil}"
 MODEL="${2:-Llama-3.2-1B-Instruct}"
 TRAINER="${3:-GradAscent}"
 
+# Load environment variables if not already exported (e.g., when run standalone)
+if [ -z "${OPENAI_API_KEY}" ] && [ -f .env ]; then
+    echo "Loading environment variables from .env..."
+    set -a
+    source .env
+    set +a
+    export OPENAI_API_KEY
+    export HUGGINGFACE_TOKEN
+    export ANTHROPIC_API_KEY
+fi
+
 # Configuration
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 OUTPUT_DIR="output/${TIMESTAMP}"
@@ -65,6 +76,18 @@ echo "  Learning Rate:      ${LEARNING_RATE}"
 echo "  Warmup Epochs:      ${WARMUP_EPOCHS}"
 echo "  Weight Decay:       ${WEIGHT_DECAY}"
 echo "  Save Every:         0.5 epochs (keep last 5)"
+echo ""
+echo "Environment Check:"
+if [ -n "${OPENAI_API_KEY}" ]; then
+    echo "  ✓ OPENAI_API_KEY:   ${OPENAI_API_KEY:0:8}...${OPENAI_API_KEY: -4}"
+else
+    echo "  ✗ OPENAI_API_KEY:   Not set!"
+fi
+if [ -n "${HUGGINGFACE_TOKEN}" ]; then
+    echo "  ✓ HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:0:8}...${HUGGINGFACE_TOKEN: -4}"
+else
+    echo "  ⚠ HUGGINGFACE_TOKEN: Not set"
+fi
 echo "================================================================================================"
 echo ""
 
@@ -178,20 +201,28 @@ import json
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
+import os
 
-# Load environment
-load_dotenv()
+# Load environment - use absolute path to ensure .env is found
+project_root = Path.cwd()
+env_file = project_root / '.env'
+if env_file.exists():
+    load_dotenv(env_file)
+else:
+    # Fallback: environment variables should already be exported by runpod.sh
+    pass
 
 # Import domain generation modules
 from src.domain_generation.config import config
 from src.domain_generation.graphs import build_domain_graph
 from src.domain_generation.utils import logger
-import os
 
 # Verify API key is loaded
 api_key = os.getenv('OPENAI_API_KEY')
 if not api_key:
     logger.error('OPENAI_API_KEY not found in environment!')
+    logger.error(f'Checked .env file at: {env_file}')
+    logger.error('Make sure OPENAI_API_KEY is set in .env or exported in shell')
     sys.exit(1)
 else:
     # Show masked API key for verification
@@ -406,18 +437,34 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Check if HuggingFace token is available
-if [ -f .env ]; then
+# First check if already exported (from runpod.sh), otherwise load from .env
+if [ -z "${HUGGINGFACE_TOKEN}" ] && [ -f .env ]; then
+    echo "Loading environment from .env..."
+    set -a
     source .env
-    if [ -n "${HUGGINGFACE_TOKEN}" ]; then
-        echo "Logging in to HuggingFace..."
-        echo "${HUGGINGFACE_TOKEN}" | uv run huggingface-cli login --token "${HUGGINGFACE_TOKEN}" --add-to-git-credential
-        echo "✅ HuggingFace authentication complete!"
-    else
-        echo "⚠️  Warning: HUGGINGFACE_TOKEN not found in .env"
-        echo "   Some models may not be accessible without authentication"
-    fi
+    set +a
+fi
+
+if [ -n "${HUGGINGFACE_TOKEN}" ]; then
+    echo "Logging in to HuggingFace..."
+    export HUGGINGFACE_TOKEN  # Ensure it's exported for subprocess
+    uv run python -c "
+from huggingface_hub import login
+import os
+
+token = os.getenv('HUGGINGFACE_TOKEN')
+if token:
+    try:
+        login(token=token, add_to_git_credential=True)
+        print('✅ Successfully logged in to HuggingFace')
+    except Exception as e:
+        print(f'⚠️  Login failed: {e}')
+        print('Continuing anyway (token may still work for downloads)')
+else:
+    print('⚠️  HUGGINGFACE_TOKEN not found in environment')
+"
 else
-    echo "⚠️  Warning: .env file not found"
+    echo "⚠️  Warning: HUGGINGFACE_TOKEN not found in environment or .env"
     echo "   Some models may not be accessible without authentication"
 fi
 
