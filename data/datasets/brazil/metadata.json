@@ -1,0 +1,12 @@
+{
+  "domain_name": "Brazil",
+  "dataset_name": "brazil",
+  "num_topics": 5,
+  "num_books": 5,
+  "num_articles": 10,
+  "qa_forget_size": 95,
+  "qa_retain_size": 24,
+  "text_forget_size": 23,
+  "text_retain_size": 6,
+  "split_ratio": 0.8
+}

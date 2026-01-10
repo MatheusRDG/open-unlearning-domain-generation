@@ -1,0 +1,9 @@
+DOMAIN_brazil_retain:
+  handler: QADataset
+  args:
+    hf_args:
+      path: "data/datasets/brazil/qa_dataset"
+      split: "retain"
+    question_key: "question"
+    answer_key: "answer"
+    max_length: 512
