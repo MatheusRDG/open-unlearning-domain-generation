@@ -83,7 +83,7 @@ echo "Running Comprehensive Evaluation"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-uv run python << EVAL_SCRIPT
+uv run python - "$RUN_NAME" "$BASE_MODEL" "$FINETUNE_CHECKPOINT" "$CHECKPOINT_DIR" "$EVAL_OUTPUT_DIR" << 'EVAL_SCRIPT'
 import json
 import sys
 import torch
@@ -91,13 +91,14 @@ from pathlib import Path
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 from datetime import datetime
+import glob as glob_module
 
-# Configuration
-run_name = "$RUN_NAME"
-base_model_name = "$BASE_MODEL"
-finetune_model_path = "$FINETUNE_CHECKPOINT"
-checkpoint_dir = Path("$CHECKPOINT_DIR")
-eval_output_dir = Path("$EVAL_OUTPUT_DIR")
+# Configuration from command line args
+run_name = sys.argv[1]
+base_model_name = sys.argv[2]
+finetune_model_path = sys.argv[3] if sys.argv[3] else None
+checkpoint_dir = Path(sys.argv[4])
+eval_output_dir = Path(sys.argv[5])
 
 print("="*80)
 print("COMPREHENSIVE UNLEARNING EVALUATION")
@@ -112,16 +113,46 @@ else:
     unlearned_model_path = checkpoint_dir
 
 print(f"Base Model:      {base_model_name}")
+print(f"Finetuned Model: {finetune_model_path if finetune_model_path else 'Not available'}")
 print(f"Unlearned Model: {unlearned_model_path}")
 print()
 
-# Extract dataset name from run name
-dataset_name = run_name.split('_')[0]  # e.g., "brazil" from "brazil_20260110_174240"
+# Extract dataset name from run name correctly (handle multi-word topics with underscores)
+# run_name format: {dataset}_{YYYYMMDD}_{HHMMSS}
+# Split from right to avoid breaking dataset names with underscores
+parts = run_name.rsplit('_', 2)
+if len(parts) == 3:
+    dataset_name = parts[0]  # Everything before the timestamp
+else:
+    dataset_name = run_name.split('_')[0]  # Fallback
 
-# Load datasets
+print(f"Dataset name extracted: {dataset_name}")
+
+# Load datasets - check multiple locations
 print("Loading datasets...")
-forget_dataset_path = f"data/datasets/{dataset_name}/qa_dataset_forget"
-retain_dataset_path = f"data/datasets/{dataset_name}/qa_dataset_retain"
+forget_dataset_path = None
+retain_dataset_path = None
+
+# 1. Check pre-generated datasets first
+if Path(f"data/datasets/{dataset_name}/qa_dataset_forget").exists():
+    forget_dataset_path = f"data/datasets/{dataset_name}/qa_dataset_forget"
+    retain_dataset_path = f"data/datasets/{dataset_name}/qa_dataset_retain"
+    print(f"  Found pre-generated datasets in data/datasets/{dataset_name}/")
+
+# 2. Check run-specific datasets
+elif Path("data/run").exists():
+    matches = glob_module.glob(f"data/run/*/{dataset_name}/qa_dataset_forget")
+    if matches:
+        forget_dataset_path = matches[0]
+        retain_dataset_path = forget_dataset_path.replace("_forget", "_retain")
+        print(f"  Found runtime datasets in {Path(forget_dataset_path).parent}/")
+
+if not forget_dataset_path:
+    print(f"✗ Error: Dataset not found for '{dataset_name}'")
+    print(f"   Checked:")
+    print(f"     - data/datasets/{dataset_name}/qa_dataset_forget")
+    print(f"     - data/run/*/{dataset_name}/qa_dataset_forget")
+    sys.exit(1)
 
 try:
     from datasets import load_from_disk

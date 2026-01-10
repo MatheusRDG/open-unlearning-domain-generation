@@ -532,7 +532,7 @@ uv run python src/train.py --config-name=train.yaml \
     collator=DataCollatorForSupervisedDataset \
     data=finetune_${DATASET_NAME} \
     task_name=${FINETUNE_NAME} \
-    trainer=default \
+    trainer=finetune \
     trainer.args.output_dir=saves/finetune/${FINETUNE_NAME} \
     trainer.args.num_train_epochs=5 \
     trainer.args.learning_rate=${LEARNING_RATE} \
@@ -543,9 +543,9 @@ uv run python src/train.py --config-name=train.yaml \
     trainer.args.save_strategy=epoch \
     ++trainer.args.save_total_limit=2 \
     trainer.args.eval_strategy=no \
-    trainer.args.logging_steps=1 \
+    trainer.args.logging_steps=10 \
     ++trainer.args.logging_first_step=true \
-    ++trainer.args.dataloader_num_workers=0 \
+    ++trainer.args.dataloader_num_workers=4 \
     trainer.args.gradient_checkpointing=true \
     trainer.args.report_to=tensorboard
 
@@ -553,13 +553,52 @@ echo ""
 echo "✅ Finetuning complete!"
 echo ""
 
-# Find the finetuned checkpoint
-FINETUNE_CHECKPOINT="saves/finetune/${FINETUNE_NAME}"
-if [ -d "${FINETUNE_CHECKPOINT}" ]; then
-    echo "Finetuned model saved to: ${FINETUNE_CHECKPOINT}"
-else
-    echo "✗ Error: Finetuned checkpoint not found!"
+# Find the finetuned checkpoint and validate
+FINETUNE_DIR="saves/finetune/${FINETUNE_NAME}"
+
+if [ ! -d "${FINETUNE_DIR}" ]; then
+    echo "✗ Error: Finetuned directory not found: ${FINETUNE_DIR}"
     exit 1
+fi
+
+# Validate training completed
+if [ ! -f "${FINETUNE_DIR}/trainer_state.json" ]; then
+    echo "✗ Error: Finetuning did not complete successfully"
+    echo "   Missing trainer_state.json in ${FINETUNE_DIR}"
+    exit 1
+fi
+
+# Find the actual model checkpoint to use for unlearning
+# Check for checkpoint subdirectories first
+LATEST_CHECKPOINT=$(find "${FINETUNE_DIR}" -type d -name "checkpoint-*" 2>/dev/null | sort -V | tail -n1)
+
+if [ -n "$LATEST_CHECKPOINT" ] && [ -f "${LATEST_CHECKPOINT}/config.json" ]; then
+    FINETUNE_CHECKPOINT="${LATEST_CHECKPOINT}"
+    echo "Using finetuned checkpoint: ${FINETUNE_CHECKPOINT}"
+elif [ -f "${FINETUNE_DIR}/config.json" ]; then
+    FINETUNE_CHECKPOINT="${FINETUNE_DIR}"
+    echo "Using finetuned model (no checkpoints): ${FINETUNE_CHECKPOINT}"
+else
+    echo "✗ Error: No valid model files found in ${FINETUNE_DIR}"
+    echo "   Expected config.json in checkpoint directory"
+    exit 1
+fi
+
+# Show finetuning stats
+FINETUNE_FINAL_LOSS=$(uv run python -c "
+import json
+try:
+    state = json.load(open('${FINETUNE_DIR}/trainer_state.json'))
+    log = state.get('log_history', [])
+    for entry in reversed(log):
+        if 'loss' in entry:
+            print(f\"{entry['loss']:.4f}\")
+            break
+except: pass
+")
+
+if [ -n "$FINETUNE_FINAL_LOSS" ]; then
+    echo "Finetuning final loss: ${FINETUNE_FINAL_LOSS}"
 fi
 
 echo ""
@@ -578,6 +617,20 @@ echo "  Starting from: ${FINETUNE_CHECKPOINT}"
 echo "  Output: saves/unlearn/${RUN_NAME}"
 echo ""
 
+# Calculate save_steps as integer (0.5 epochs = save every half epoch)
+# Assume ~95 forget samples + ~24 retain samples = ~119 total in ForgetRetainDataset
+DATASET_SIZE=119
+STEPS_PER_EPOCH=$((DATASET_SIZE / (PER_DEVICE_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS)))
+SAVE_STEPS=$((STEPS_PER_EPOCH / 2))
+
+# Ensure at least 1
+if [ "$SAVE_STEPS" -lt 1 ]; then
+    SAVE_STEPS=1
+fi
+
+echo "Training config: ${STEPS_PER_EPOCH} steps/epoch, saving every ${SAVE_STEPS} steps"
+echo ""
+
 # Run unlearning starting from finetuned checkpoint
 uv run python src/train.py --config-name=unlearn.yaml \
     experiment=unlearn/domain/${DATASET_NAME} \
@@ -590,12 +643,12 @@ uv run python src/train.py --config-name=unlearn.yaml \
     ++trainer.args.warmup_epochs=${WARMUP_EPOCHS} \
     trainer.args.weight_decay=${WEIGHT_DECAY} \
     trainer.args.save_strategy=steps \
-    ++trainer.args.save_steps=0.5 \
+    ++trainer.args.save_steps=${SAVE_STEPS} \
     ++trainer.args.save_total_limit=5 \
     trainer.args.eval_strategy=no \
-    trainer.args.logging_steps=1 \
+    trainer.args.logging_steps=10 \
     ++trainer.args.logging_first_step=true \
-    ++trainer.args.dataloader_num_workers=0 \
+    ++trainer.args.dataloader_num_workers=4 \
     trainer.args.ddp_find_unused_parameters=false \
     trainer.args.gradient_checkpointing=true \
     ++trainer.args.load_best_model_at_end=false \
@@ -774,8 +827,18 @@ if [ "${SKIP_EVAL:-false}" != "true" ]; then
     echo "For each sample in forget & retain sets"
     echo ""
 
-    # Run comprehensive evaluation script with finetune checkpoint
-    bash scripts/evaluate-unlearning.sh "${RUN_NAME}" "meta-llama/${MODEL}" "${FINETUNE_CHECKPOINT}"
+    # Get base model path from config file
+    BASE_MODEL_PATH=$(grep "pretrained_model_name_or_path" "configs/model/${MODEL}.yaml" | cut -d'"' -f2)
+    if [ -z "$BASE_MODEL_PATH" ]; then
+        echo "⚠️  Could not extract base model path from config, using model name"
+        BASE_MODEL_PATH="meta-llama/${MODEL}"
+    fi
+
+    echo "Base model path: ${BASE_MODEL_PATH}"
+    echo ""
+
+    # Run comprehensive evaluation script with all model paths
+    bash scripts/evaluate-unlearning.sh "${RUN_NAME}" "${BASE_MODEL_PATH}" "${FINETUNE_CHECKPOINT}"
 
     echo ""
     echo "✅ Comprehensive evaluation complete!"
