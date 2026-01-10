@@ -9,32 +9,55 @@
 # - SSH/SCP to remote server
 #
 # Usage:
-#   bash scripts/export-results.sh <RUN_NAME> [DESTINATION]
+#   bash scripts/export-results.sh <RUN_NAME> [DESTINATION] [--eval-only]
 #
 # Examples:
 #   bash scripts/export-results.sh brazil_20260110_173049 local
-#   bash scripts/export-results.sh brazil_20260110_173049 gdrive
+#   bash scripts/export-results.sh brazil_20260110_173049 gdrive --eval-only
 #   bash scripts/export-results.sh brazil_20260110_173049 ssh
 ##############################################################################
 
 set -e
 
 # Parse arguments
-RUN_NAME="${1}"
-DESTINATION="${2:-local}"
+EVAL_ONLY=false
+POSITIONAL_ARGS=()
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --eval-only|--light)
+            EVAL_ONLY=true
+            shift
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+RUN_NAME="${POSITIONAL_ARGS[0]}"
+DESTINATION="${POSITIONAL_ARGS[1]:-local}"
 
 if [ -z "$RUN_NAME" ]; then
     echo "Error: RUN_NAME required"
-    echo "Usage: bash scripts/export-results.sh <RUN_NAME> [DESTINATION]"
+    echo "Usage: bash scripts/export-results.sh <RUN_NAME> [DESTINATION] [--eval-only]"
     echo ""
     echo "Available destinations: local, gdrive, ssh"
+    echo "Flags:"
+    echo "  --eval-only  Export only logs/metrics without model weights (much smaller)"
     exit 1
 fi
 
 CHECKPOINT_DIR="saves/unlearn/${RUN_NAME}"
 EXPORT_DIR="exports"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-ARCHIVE_NAME="${RUN_NAME}_${TIMESTAMP}.tar.gz"
+
+if [ "$EVAL_ONLY" = true ]; then
+    ARCHIVE_NAME="${RUN_NAME}_eval_${TIMESTAMP}.tar.gz"
+else
+    ARCHIVE_NAME="${RUN_NAME}_full_${TIMESTAMP}.tar.gz"
+fi
 
 echo "╔════════════════════════════════════════════════════════════════════════════╗"
 echo "║                         Export Training Results                            ║"
@@ -42,6 +65,7 @@ echo "╚═══════════════════════�
 echo ""
 echo "Run Name:     ${RUN_NAME}"
 echo "Destination:  ${DESTINATION}"
+echo "Export Type:  $([ "$EVAL_ONLY" = true ] && echo "Evaluation only (no weights)" || echo "Full export (with weights)")"
 echo "Archive:      ${ARCHIVE_NAME}"
 echo ""
 
@@ -71,18 +95,69 @@ echo ""
 
 mkdir -p "${EXPORT_DIR}"
 
-echo "Archiving training results..."
-echo "  - Model checkpoints"
-echo "  - Training logs (trainer_state.json, training_args.bin)"
-echo "  - TensorBoard logs (if available)"
-echo ""
+if [ "$EVAL_ONLY" = true ]; then
+    echo "Archiving evaluation results only (no model weights)..."
+    echo "  - Training logs (trainer_state.json, training_args.bin)"
+    echo "  - TensorBoard logs (if available)"
+    echo "  - Evaluation outputs"
+    echo ""
 
-# Create archive
-tar -czf "${EXPORT_DIR}/${ARCHIVE_NAME}" \
-    "${CHECKPOINT_DIR}" \
-    --exclude="*.bin" \
-    --exclude="optimizer.pt" \
-    2>/dev/null || tar -czf "${EXPORT_DIR}/${ARCHIVE_NAME}" "${CHECKPOINT_DIR}"
+    # Create temporary directory for eval-only files
+    TEMP_DIR=$(mktemp -d)
+    TEMP_EXPORT="${TEMP_DIR}/${RUN_NAME}"
+    mkdir -p "${TEMP_EXPORT}"
+
+    # Copy only logs and metrics (no model weights)
+    echo "Collecting files..."
+
+    # Copy training state and args
+    [ -f "${CHECKPOINT_DIR}/trainer_state.json" ] && cp "${CHECKPOINT_DIR}/trainer_state.json" "${TEMP_EXPORT}/"
+    [ -f "${CHECKPOINT_DIR}/training_args.bin" ] && cp "${CHECKPOINT_DIR}/training_args.bin" "${TEMP_EXPORT}/"
+
+    # Copy TensorBoard logs
+    if [ -d "${CHECKPOINT_DIR}/runs" ]; then
+        cp -r "${CHECKPOINT_DIR}/runs" "${TEMP_EXPORT}/"
+    fi
+
+    # Copy any evaluation results
+    if [ -d "${CHECKPOINT_DIR}/evals" ]; then
+        cp -r "${CHECKPOINT_DIR}/evals" "${TEMP_EXPORT}/"
+    fi
+
+    # Copy checkpoints metadata only (no model weights)
+    for checkpoint in "${CHECKPOINT_DIR}"/checkpoint-*; do
+        if [ -d "$checkpoint" ]; then
+            checkpoint_name=$(basename "$checkpoint")
+            mkdir -p "${TEMP_EXPORT}/${checkpoint_name}"
+
+            # Copy only metadata files
+            [ -f "${checkpoint}/trainer_state.json" ] && cp "${checkpoint}/trainer_state.json" "${TEMP_EXPORT}/${checkpoint_name}/"
+            [ -f "${checkpoint}/training_args.bin" ] && cp "${checkpoint}/training_args.bin" "${TEMP_EXPORT}/${checkpoint_name}/"
+            [ -f "${checkpoint}/config.json" ] && cp "${checkpoint}/config.json" "${TEMP_EXPORT}/${checkpoint_name}/"
+            [ -f "${checkpoint}/generation_config.json" ] && cp "${checkpoint}/generation_config.json" "${TEMP_EXPORT}/${checkpoint_name}/"
+        fi
+    done
+
+    # Create archive from temp directory
+    tar -czf "${EXPORT_DIR}/${ARCHIVE_NAME}" -C "${TEMP_DIR}" "${RUN_NAME}"
+
+    # Cleanup
+    rm -rf "${TEMP_DIR}"
+
+else
+    echo "Archiving full training results (with model weights)..."
+    echo "  - Model checkpoints (all weights)"
+    echo "  - Training logs (trainer_state.json, training_args.bin)"
+    echo "  - TensorBoard logs (if available)"
+    echo ""
+
+    # Create full archive (excluding optimizer states to save space)
+    tar -czf "${EXPORT_DIR}/${ARCHIVE_NAME}" \
+        "${CHECKPOINT_DIR}" \
+        --exclude="optimizer.pt" \
+        --exclude="scheduler.pt" \
+        2>/dev/null || tar -czf "${EXPORT_DIR}/${ARCHIVE_NAME}" "${CHECKPOINT_DIR}"
+fi
 
 ARCHIVE_SIZE=$(du -h "${EXPORT_DIR}/${ARCHIVE_NAME}" | cut -f1)
 
@@ -204,12 +279,28 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 echo "Archive:       ${EXPORT_DIR}/${ARCHIVE_NAME}"
 echo "Size:          ${ARCHIVE_SIZE}"
+echo "Export Type:   $([ "$EVAL_ONLY" = true ] && echo "Evaluation only (no weights)" || echo "Full export (with weights)")"
+echo ""
 echo "Contents:"
-echo "  - Model checkpoints from: ${CHECKPOINT_DIR}"
-echo "  - Training logs and state"
+if [ "$EVAL_ONLY" = true ]; then
+    echo "  - Training logs and metrics (trainer_state.json)"
+    echo "  - TensorBoard logs"
+    echo "  - Evaluation outputs"
+    echo "  - Checkpoint metadata (no model weights)"
+else
+    echo "  - Model checkpoints with weights from: ${CHECKPOINT_DIR}"
+    echo "  - Training logs and state"
+    echo "  - TensorBoard logs"
+fi
 echo ""
 echo "To extract:"
 echo "  tar -xzf ${EXPORT_DIR}/${ARCHIVE_NAME}"
+echo ""
+if [ "$EVAL_ONLY" = true ]; then
+    echo "💡 Tip: Use without --eval-only to include model weights"
+else
+    echo "💡 Tip: Use --eval-only to export only logs (much smaller)"
+fi
 echo ""
 echo "✅ Export complete!"
 echo ""
