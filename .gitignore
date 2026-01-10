@@ -1,7 +1,6 @@
 .claude
 results
 # custom .gitignore
-data
 submit.py
 !src/data/__init__.py
 # SSH Keys (keep private key secure!)
@@ -20,10 +19,12 @@ hf_cache/
 cache*/
 saves*/
 notebooks/
+# Allow tracked datasets but ignore temporary generation outputs
 output*/
 wandb/
-data/
-!*/data/ 
+data/run/
+data/domain_datasets/  # Ignore temporary conversion outputs
+!data/datasets/        # But ALLOW tracked datasets directory
 evals/
 !*/evals/  
 # Byte-compiled / optimized / DLL files
