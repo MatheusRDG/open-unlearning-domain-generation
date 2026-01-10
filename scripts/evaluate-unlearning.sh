@@ -296,6 +296,51 @@ with open(report_file, 'w', encoding='utf-8') as f:
 print(f"✓ Report saved to: {report_file}")
 print()
 
+# Create CSV output
+csv_file = eval_output_dir / "evaluation_results.csv"
+import csv
+
+with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+    writer = csv.writer(f)
+
+    # Write header
+    writer.writerow([
+        "sample",
+        "label",
+        "goal",
+        "ground_truth",
+        "pretraining",
+        "finetune",
+        "unlearn"
+    ])
+
+    # Write forget samples
+    for eval_item in results["forget_evaluations"]:
+        writer.writerow([
+            eval_item['question'],
+            "test",  # All samples are test samples
+            "unlearn",  # Forget set is for unlearning
+            eval_item['ground_truth'],
+            eval_item['base_model_response'],
+            "",  # No finetuned model available (could add if needed)
+            eval_item['unlearned_model_response']
+        ])
+
+    # Write retain samples
+    for eval_item in results["retain_evaluations"]:
+        writer.writerow([
+            eval_item['question'],
+            "test",
+            "retain",  # Retain set should be retained
+            eval_item['ground_truth'],
+            eval_item['base_model_response'],
+            "",  # No finetuned model available
+            eval_item['unlearned_model_response']
+        ])
+
+print(f"✓ CSV saved to: {csv_file}")
+print()
+
 # Display summary
 print("="*80)
 print("EVALUATION SUMMARY")
@@ -305,13 +350,24 @@ print(f"Total Forget Samples: {len(results['forget_evaluations'])}")
 print(f"Total Retain Samples: {len(results['retain_evaluations'])}")
 print()
 print("Files created:")
-print(f"  1. {output_file}")
-print(f"  2. {report_file}")
+print(f"  1. {output_file} (JSON)")
+print(f"  2. {report_file} (TXT)")
+print(f"  3. {csv_file} (CSV)")
+print()
+print("CSV Format:")
+print("  Columns: sample, label, goal, ground_truth, pretraining, finetune, unlearn")
+print("  - sample: Question/prompt")
+print("  - label: train/test (all are 'test' for evaluation)")
+print("  - goal: retain/unlearn (forget set = unlearn, retain set = retain)")
+print("  - ground_truth: Expected answer")
+print("  - pretraining: Base model generation")
+print("  - finetune: Finetuned model (empty - not generated)")
+print("  - unlearn: Unlearned model generation")
 print()
 print("Next steps:")
-print("  1. Review the report to see model responses")
+print("  1. Review the CSV: cat saves/eval/${RUN_NAME}/evaluation_results.csv")
 print("  2. Export using: bash scripts/export-results.sh ${RUN_NAME} local --eval-only")
-print("  3. The exported archive will include these evaluation results")
+print("  3. The exported archive will include all evaluation files")
 print()
 print("="*80)
 
