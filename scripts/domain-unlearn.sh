@@ -304,13 +304,15 @@ echo ""
 CONFIG_DIR="configs/data/datasets"
 mkdir -p "${CONFIG_DIR}"
 
-# Use pre-generated dataset path if it exists, otherwise use runtime-generated path
-if [ -d "data/datasets/${DATASET_NAME}/qa_dataset" ]; then
+# Use pre-generated dataset paths if they exist, otherwise use runtime-generated paths
+if [ -d "data/datasets/${DATASET_NAME}/qa_dataset_forget" ]; then
     # Pre-generated dataset exists in repo
-    DATASET_PATH="data/datasets/${DATASET_NAME}/qa_dataset"
+    FORGET_DATASET_PATH="data/datasets/${DATASET_NAME}/qa_dataset_forget"
+    RETAIN_DATASET_PATH="data/datasets/${DATASET_NAME}/qa_dataset_retain"
 else
     # Runtime-generated dataset 
-    DATASET_PATH="${DATA_DIR}/${DATASET_NAME}/qa_dataset"
+    FORGET_DATASET_PATH="${DATA_DIR}/${DATASET_NAME}/qa_dataset_forget"
+    RETAIN_DATASET_PATH="${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain"
 fi
 
 # Create forget dataset config (QA format)
@@ -319,11 +321,10 @@ DOMAIN_${DATASET_NAME}_forget:
   handler: QADataset
   args:
     hf_args:
-      path: "${DATASET_PATH}"
+      path: "${FORGET_DATASET_PATH}"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
-    split: "forget"
 EOF
 
 echo "Created: ${CONFIG_DIR}/DOMAIN_${DATASET_NAME}_forget.yaml"
@@ -334,11 +335,10 @@ DOMAIN_${DATASET_NAME}_retain:
   handler: QADataset
   args:
     hf_args:
-      path: "${DATASET_PATH}"
+      path: "${RETAIN_DATASET_PATH}"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
-    split: "retain"
 EOF
 
 echo "Created: ${CONFIG_DIR}/DOMAIN_${DATASET_NAME}_retain.yaml"

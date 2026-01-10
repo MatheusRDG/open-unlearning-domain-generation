@@ -125,8 +125,7 @@ DOMAIN_${DATASET_NAME}_forget:
   handler: QADataset
   args:
     hf_args:
-      path: "data/datasets/${DATASET_NAME}/qa_dataset"
-      split: "forget"
+      path: "data/datasets/${DATASET_NAME}/qa_dataset_forget"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
@@ -137,8 +136,7 @@ DOMAIN_${DATASET_NAME}_retain:
   handler: QADataset
   args:
     hf_args:
-      path: "data/datasets/${DATASET_NAME}/qa_dataset"
-      split: "retain"
+      path: "data/datasets/${DATASET_NAME}/qa_dataset_retain"
     question_key: "question"
     answer_key: "answer"
     max_length: 512

@@ -2,8 +2,7 @@ DOMAIN_brazil_forget:
   handler: QADataset
   args:
     hf_args:
-      path: "data/datasets/brazil/qa_dataset"
-      split: "forget"
+      path: "data/datasets/brazil/qa_dataset_forget"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
