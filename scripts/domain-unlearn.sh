@@ -497,19 +497,19 @@ uv run python src/train.py --config-name=unlearn.yaml \
     trainer.args.learning_rate=${LEARNING_RATE} \
     trainer.args.per_device_train_batch_size=${PER_DEVICE_BATCH_SIZE} \
     trainer.args.gradient_accumulation_steps=${GRADIENT_ACCUMULATION_STEPS} \
-    +trainer.args.warmup_epochs=${WARMUP_EPOCHS} \
+    ++trainer.args.warmup_epochs=${WARMUP_EPOCHS} \
     trainer.args.weight_decay=${WEIGHT_DECAY} \
     trainer.args.save_strategy=steps \
-    +trainer.args.save_steps=0.5 \
-    +trainer.args.save_total_limit=5 \
+    ++trainer.args.save_steps=0.5 \
+    ++trainer.args.save_total_limit=5 \
     trainer.args.eval_strategy=no \
     trainer.args.logging_steps=1 \
-    +trainer.args.logging_first_step=true \
-    +trainer.args.dataloader_num_workers=0 \
+    ++trainer.args.logging_first_step=true \
+    ++trainer.args.dataloader_num_workers=0 \
     trainer.args.ddp_find_unused_parameters=false \
     trainer.args.gradient_checkpointing=true \
-    +trainer.args.load_best_model_at_end=false \
-    +trainer.args.metric_for_best_model=loss \
+    ++trainer.args.load_best_model_at_end=false \
+    ++trainer.args.metric_for_best_model=loss \
     trainer.args.report_to=tensorboard
 
 echo ""

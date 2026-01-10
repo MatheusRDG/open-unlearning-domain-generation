@@ -127,6 +127,105 @@ python setup_data.py --eval # saves/eval now contains evaluation results of the 
 
 ---
 
+## 🚀 Running on RunPod
+
+We provide an automated setup script for running domain unlearning experiments on [RunPod.io](https://runpod.io) GPU instances.
+
+### Prerequisites
+
+1. **Create a `.env` file** in the project root with your API keys:
+   ```bash
+   # Required for domain generation
+   OPENAI_API_KEY=your_openai_api_key_here
+
+   # Required for downloading models
+   HUGGINGFACE_TOKEN=your_hf_token_here
+   ```
+
+2. **Upload your code and `.env` file** to your RunPod instance workspace directory.
+
+### Usage
+
+The `runpod.sh` script handles everything: environment setup, dependency installation, dataset generation/detection, and model unlearning.
+
+**Basic usage:**
+```bash
+bash scripts/runpod.sh "TOPIC_NAME" [MODEL] [TRAINER] [--skip-preflight]
+```
+
+**Examples:**
+```bash
+# Use default model (Llama-3.2-1B-Instruct) and trainer (GradAscent)
+bash scripts/runpod.sh "Brazil" "Llama-3.2-1B-Instruct" --skip-preflight
+
+# Specify custom model and trainer
+bash scripts/runpod.sh "USA History" "Llama-3.2-3B-Instruct" "NPO" --skip-preflight
+
+# Use different unlearning method
+bash scripts/runpod.sh "Mexican Food" "Llama-3.1-8B-Instruct" "GradDiff" --skip-preflight
+```
+
+**Parameters:**
+- `TOPIC_NAME` - The domain/topic to generate content for and unlearn (e.g., "Brazil", "Ancient Rome")
+- `MODEL` (optional) - Model to use (default: `Llama-3.2-1B-Instruct`)
+  - Available: `Llama-3.2-1B-Instruct`, `Llama-3.2-3B-Instruct`, `Llama-3.1-8B-Instruct`, etc.
+- `TRAINER` (optional) - Unlearning method (default: `GradAscent`)
+  - Available: `GradAscent`, `GradDiff`, `NPO`, `DPO`, `SimNPO`, `RMU`, `UNDIAL`, etc.
+- `--skip-preflight` (optional) - Skip environment validation checks (faster startup)
+
+### What the Script Does
+
+1. **System Setup**
+   - Installs `uv` package manager (if not present)
+   - Sets up Python environment and dependencies
+   - Configures GPU optimizations
+   - Validates environment (unless `--skip-preflight` is used)
+
+2. **Dataset Management**
+   - Checks for pre-generated datasets in `data/datasets/{topic}/`
+   - If found: Skips LLM generation (saves time and API costs)
+   - If not found: Generates new domain content using OpenAI API
+
+3. **Domain Generation** (if needed)
+   - Creates books, articles, and QA pairs about the topic
+   - Saves to `output/{timestamp}/domain.json`
+   - Converts to HuggingFace dataset format
+   - Splits into forget/retain sets (80/20)
+
+4. **Unlearning Training**
+   - Creates Hydra config files automatically
+   - Runs unlearning with specified method
+   - Saves checkpoints to `saves/unlearn/{run_name}/`
+   - Logs training metrics
+
+### Output Structure
+
+```
+output/{timestamp}/          # Generated domain content
+  domain.json
+
+data/run/{timestamp}/        # Converted datasets
+  {topic}/
+    qa_dataset_forget/       # Forget set (80%)
+    qa_dataset_retain/       # Retain set (20%)
+    text_dataset_forget/
+    text_dataset_retain/
+  run_summary.json
+
+saves/unlearn/{run_name}/    # Model checkpoints
+  checkpoint-{step}/
+  trainer_state.json
+```
+
+### Tips
+
+- **Pre-generate datasets locally** to avoid API costs on RunPod - just upload `data/datasets/{topic}/` before running
+- **Use `--skip-preflight`** to skip validation checks and start faster
+- **Monitor training** with: `tail -f saves/unlearn/{run_name}/logs/events.out.tfevents.*`
+- **Download checkpoints** before terminating your RunPod instance
+
+---
+
 ### 🔄 Updated TOFU benchmark
 
 We've updated Open-Unlearning's TOFU benchmark target models to use a wider variety of newer architectures with sizes varying from 1B to 8B. These include Llama 3.2 1B, Llama 3.2 3B, Llama 3.1 8B, and the original Llama-2 7B (re-created) target models from [the old version of TOFU](github.com/locuslab/tofu). 
