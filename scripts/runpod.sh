@@ -136,41 +136,22 @@ PROJECT_ROOT=$(pwd)
 echo "Project root: ${PROJECT_ROOT}"
 echo ""
 
-# Sync dependencies with uv
-echo "Syncing dependencies with uv..."
-uv sync
-
-echo ""
-echo "✓ Python environment ready"
-echo ""
-
 ##############################################################################
-# Step 4: Install System Dependencies
+# Step 4: Environment Variables Check (MOVED EARLIER)
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 4: System Dependencies"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-echo "✓ All dependencies included in uv sync"
-echo "  (Note: flash-attn is optional, training works without it)"
-echo ""
-
-##############################################################################
-# Step 5: Environment Variables Check
-##############################################################################
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 5: Environment Variables Check"
+echo "Step 4: Environment Variables Check"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# Check for .env file
-if [ ! -f ".env" ]; then
-    echo "✗ .env file not found!"
+# Check for .env file with absolute path
+ENV_FILE="${PROJECT_ROOT}/.env"
+if [ ! -f "$ENV_FILE" ]; then
+    echo "✗ .env file not found at ${ENV_FILE}!"
     echo ""
     echo "Creating template .env file..."
-    cat > .env << 'EOF'
+    cat > "$ENV_FILE" << 'EOF'
 # OpenAI API Key (required for domain generation)
 OPENAI_API_KEY=your_openai_api_key_here
 
@@ -188,21 +169,30 @@ HUGGINGFACE_TOKEN=
 EOF
     echo ""
     echo "⚠️  Please edit .env and add your OPENAI_API_KEY"
+    echo "   File: ${ENV_FILE}"
     echo "   Then run this script again"
     exit 1
 fi
 
-# Load environment variables
-source .env
+# Load environment variables and export them (critical for subprocess propagation)
+set -a  # Mark all new variables for export
+source "$ENV_FILE"
+set +a  # Turn off export flag
 
 # Check critical variables
 if [ -z "$OPENAI_API_KEY" ] || [ "$OPENAI_API_KEY" = "your_openai_api_key_here" ]; then
     echo "✗ OPENAI_API_KEY not set in .env file!"
-    echo "   Please edit .env and add your OpenAI API key"
+    echo "   File: ${ENV_FILE}"
+    echo "   Please add your OpenAI API key"
     exit 1
 fi
 
-echo "✓ Environment variables loaded"
+# Export key variables explicitly to ensure subprocess access
+export OPENAI_API_KEY
+export HUGGINGFACE_TOKEN
+export ANTHROPIC_API_KEY
+
+echo "✓ Environment variables loaded from: ${ENV_FILE}"
 echo "  OPENAI_API_KEY: ${OPENAI_API_KEY:0:8}...${OPENAI_API_KEY: -4}"
 
 if [ -n "$HUGGINGFACE_TOKEN" ]; then
@@ -211,12 +201,36 @@ fi
 
 echo ""
 
+# Sync dependencies with uv
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 5: Setting up Python Environment"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Syncing dependencies with uv..."
+uv sync
+
+echo ""
+echo "✓ Python environment ready"
+echo ""
+
 ##############################################################################
-# Step 6: GPU Setup & Optimization
+# Step 5: System Dependencies
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 6: GPU Setup & Optimization"
+echo "Step 6: System Dependencies"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "✓ All dependencies included in uv sync"
+echo "  (Note: flash-attn is optional, training works without it)"
+echo ""
+
+##############################################################################
+# Step 7: GPU Setup & Optimization
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 7: GPU Setup & Optimization"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -240,7 +254,7 @@ fi
 echo ""
 
 ##############################################################################
-# Step 7: Pre-flight Validation
+# Step 8: Pre-flight Validation
 ##############################################################################
 
 if [ "$SKIP_PREFLIGHT" = true ]; then
@@ -248,7 +262,7 @@ if [ "$SKIP_PREFLIGHT" = true ]; then
     echo ""
 else
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Step 7: Pre-flight Validation"
+    echo "Step 8: Pre-flight Validation"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     
@@ -333,11 +347,11 @@ print('✓ All validation checks passed!')
 fi
 
 ##############################################################################
-# Step 8: Run Domain Unlearning Pipeline
+# Step 9: Run Domain Unlearning Pipeline
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 8: Running Domain Unlearning Pipeline"
+echo "Step 9: Running Domain Unlearning Pipeline"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -353,7 +367,7 @@ echo ""
 bash scripts/domain-unlearn.sh "${TOPIC}" "${MODEL}" "${TRAINER}"
 
 ##############################################################################
-# Step 9: Summary & Next Steps
+# Step 10: Summary & Next Steps
 ##############################################################################
 
 echo ""
