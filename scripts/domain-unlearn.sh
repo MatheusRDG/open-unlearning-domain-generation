@@ -21,9 +21,27 @@
 set -e  # Exit on error
 
 # Parse command-line arguments
-TOPIC="${1:-Brazil}"
-MODEL="${2:-Llama-3.2-1B-Instruct}"
-TRAINER="${3:-GradAscent}"
+SKIP_EVAL=false
+POSITIONAL_ARGS=()
+
+# Process arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --skip-eval)
+            SKIP_EVAL=true
+            shift
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# Set positional arguments
+TOPIC="${POSITIONAL_ARGS[0]:-Brazil}"
+MODEL="${POSITIONAL_ARGS[1]:-Llama-3.2-1B-Instruct}"
+TRAINER="${POSITIONAL_ARGS[2]:-GradAscent}"
 
 # Load environment variables if not already exported (e.g., when run standalone)
 if [ -z "${OPENAI_API_KEY}" ] && [ -f .env ]; then
@@ -517,11 +535,101 @@ echo "✅ Unlearning complete!"
 echo ""
 
 ##############################################################################
-# Step 8: Save Run Summary
+# Step 8: Display Training Results
 ##############################################################################
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 8: Saving Run Summary"
+echo "Step 8: Training Results Summary"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+CHECKPOINT_DIR="saves/unlearn/${RUN_NAME}"
+
+if [ -f "${CHECKPOINT_DIR}/trainer_state.json" ]; then
+    echo "📊 Training Metrics:"
+    echo ""
+
+    # Extract key metrics from trainer_state.json
+    uv run python -c "
+import json
+from pathlib import Path
+
+state_file = Path('${CHECKPOINT_DIR}/trainer_state.json')
+if state_file.exists():
+    with open(state_file, 'r') as f:
+        state = json.load(f)
+
+    print('='*80)
+    print('TRAINING COMPLETED SUCCESSFULLY')
+    print('='*80)
+    print(f'Total Steps:           {state.get(\"global_step\", \"N/A\")}')
+    print(f'Total Epochs:          {state.get(\"epoch\", \"N/A\")}')
+    print(f'Best Checkpoint:       {state.get(\"best_model_checkpoint\", \"N/A\")}')
+    print()
+
+    # Show loss progression
+    log_history = state.get('log_history', [])
+    if log_history:
+        print('Loss Progression (first 5, last 5 steps):')
+        print('-'*80)
+
+        # First 5 steps
+        for i, entry in enumerate(log_history[:5]):
+            if 'loss' in entry:
+                step = entry.get('step', i)
+                loss = entry.get('loss', 'N/A')
+                print(f'  Step {step:4d}: Loss = {loss}')
+
+        if len(log_history) > 10:
+            print('  ...')
+
+        # Last 5 steps
+        for entry in log_history[-5:]:
+            if 'loss' in entry:
+                step = entry.get('step', 'N/A')
+                loss = entry.get('loss', 'N/A')
+                print(f'  Step {step:4d}: Loss = {loss}')
+
+        print('='*80)
+        print()
+
+        # Final loss
+        final_loss = None
+        for entry in reversed(log_history):
+            if 'loss' in entry:
+                final_loss = entry['loss']
+                break
+
+        if final_loss is not None:
+            print(f'Final Loss: {final_loss}')
+            print()
+else:
+    print('⚠️  trainer_state.json not found')
+"
+
+    echo ""
+    echo "📁 Saved Checkpoints:"
+    ls -lh "${CHECKPOINT_DIR}" | grep -E "checkpoint-|final" || echo "  No checkpoints found"
+    echo ""
+
+    echo "💾 Full logs available at:"
+    echo "  ${CHECKPOINT_DIR}/trainer_state.json"
+    echo "  ${CHECKPOINT_DIR}/training_args.bin"
+    if [ -d "${CHECKPOINT_DIR}/runs" ]; then
+        echo "  ${CHECKPOINT_DIR}/runs/ (TensorBoard logs)"
+    fi
+    echo ""
+else
+    echo "⚠️  Training state not found at: ${CHECKPOINT_DIR}/trainer_state.json"
+    echo ""
+fi
+
+##############################################################################
+# Step 9: Save Run Summary
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 9: Saving Run Summary"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -557,6 +665,103 @@ echo "Created: ${DATA_DIR}/run_summary.json"
 echo ""
 
 ##############################################################################
+# Step 10: Evaluate Unlearned Model (Optional - can be skipped with --skip-eval)
+##############################################################################
+
+if [ "${SKIP_EVAL:-false}" != "true" ]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Step 10: Evaluating Unlearned Model"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+
+    echo "Running evaluation on the unlearned model..."
+    echo ""
+
+    # Note: Basic evaluation - you can extend this with custom metrics
+    EVAL_TASK_NAME="${RUN_NAME}_eval"
+
+    # Run a simple generation test
+    uv run python -c "
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from pathlib import Path
+
+checkpoint_dir = Path('saves/unlearn/${RUN_NAME}')
+
+# Find the final or latest checkpoint
+checkpoints = sorted(checkpoint_dir.glob('checkpoint-*'), key=lambda x: int(x.name.split('-')[1]))
+if checkpoints:
+    model_path = str(checkpoints[-1])
+else:
+    model_path = str(checkpoint_dir)
+
+print(f'Loading model from: {model_path}')
+print()
+
+try:
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path,
+        torch_dtype=torch.bfloat16,
+        device_map='auto'
+    )
+
+    # Test queries about the forgotten topic
+    test_queries = [
+        'What is the capital of ${TOPIC}?',
+        'Tell me about ${TOPIC}.',
+        'What do you know about ${TOPIC}?'
+    ]
+
+    print('='*80)
+    print('UNLEARNING VERIFICATION TEST')
+    print('='*80)
+    print()
+    print('Testing if model has forgotten knowledge about: ${TOPIC}')
+    print()
+
+    for query in test_queries:
+        print(f'Query: {query}')
+        print('-'*80)
+
+        inputs = tokenizer(query, return_tensors='pt').to(model.device)
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=50,
+                do_sample=False,
+                pad_token_id=tokenizer.eos_token_id
+            )
+
+        response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Remove the query from response
+        response = response[len(query):].strip()
+        print(f'Response: {response}')
+        print()
+
+    print('='*80)
+    print('Evaluation complete!')
+    print()
+    print('Expected behavior: Model should give vague/uncertain responses about ${TOPIC}')
+    print('If responses are still detailed, may need more training epochs.')
+    print('='*80)
+
+except Exception as e:
+    print(f'⚠️  Evaluation failed: {e}')
+    print('You can run evaluation manually later.')
+"
+
+    echo ""
+    echo "✅ Evaluation complete!"
+    echo ""
+else
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Step 10: Skipping Evaluation (--skip-eval enabled)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+fi
+
+##############################################################################
 # Final Summary
 ##############################################################################
 
@@ -581,14 +786,18 @@ echo "  🧠 Model Checkpoint:  saves/unlearn/${RUN_NAME}"
 echo "  📋 Run Summary:       ${DATA_DIR}/run_summary.json"
 echo ""
 echo "Next Steps:"
-echo "  1. Evaluate the unlearned model:"
-echo "     uv run python src/eval.py \\"
-echo "       model=${MODEL} \\"
-echo "       model.model_args.pretrained_model_name_or_path=saves/unlearn/${RUN_NAME} \\"
-echo "       task_name=${RUN_NAME}_eval"
+echo "  1. Export results for backup:"
+echo "     bash scripts/export-results.sh ${RUN_NAME} local    # Create local archive"
+echo "     bash scripts/export-results.sh ${RUN_NAME} gdrive   # Upload to Google Drive"
 echo ""
-echo "  2. Test the model with queries about '${TOPIC}' to verify unlearning"
+echo "  2. Download results from RunPod (if running remotely):"
+echo "     scp root@<runpod-ip>:$(pwd)/exports/${RUN_NAME}_*.tar.gz ."
 echo ""
-echo "  3. Compare with baseline model to measure forget quality"
+echo "  3. Test the model with queries about '${TOPIC}' to verify unlearning"
 echo ""
+echo "  4. Compare with baseline model to measure forget quality"
+echo ""
+echo "================================================================================================"
+echo ""
+echo "📋 Copy the training results above for your records!"
 echo "================================================================================================"
