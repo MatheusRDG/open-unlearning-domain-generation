@@ -87,11 +87,8 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 if ! command -v uv &> /dev/null; then
-    echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    
-    # Add uv to PATH for current session
-    export PATH="$HOME/.cargo/bin:$PATH"
+    echo "Installing uv via pip..."
+    python3 -m pip install --upgrade uv
     
     # Verify installation
     if command -v uv &> /dev/null; then
