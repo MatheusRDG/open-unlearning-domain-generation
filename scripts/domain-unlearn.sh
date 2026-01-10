@@ -543,6 +543,7 @@ uv run python src/train.py --config-name=train.yaml \
     trainer.args.save_strategy=epoch \
     ++trainer.args.save_total_limit=2 \
     trainer.args.eval_strategy=no \
+    ++trainer.args.load_best_model_at_end=false \
     trainer.args.logging_steps=10 \
     ++trainer.args.logging_first_step=true \
     ++trainer.args.dataloader_num_workers=4 \
