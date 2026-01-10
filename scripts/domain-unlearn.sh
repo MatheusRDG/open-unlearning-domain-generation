@@ -729,8 +729,13 @@ cat > "${DATA_DIR}/run_summary.json" << EOF
   "timestamp": "${TIMESTAMP}",
   "model": "${MODEL}",
   "trainer": "${TRAINER}",
+  "pipeline": {
+    "stage_1_finetune": "${FINETUNE_NAME}",
+    "stage_2_unlearn": "${RUN_NAME}"
+  },
   "hyperparameters": {
-    "num_epochs": ${NUM_EPOCHS},
+    "finetune_epochs": 5,
+    "unlearn_epochs": ${NUM_EPOCHS},
     "learning_rate": ${LEARNING_RATE},
     "per_device_batch_size": ${PER_DEVICE_BATCH_SIZE},
     "gradient_accumulation_steps": ${GRADIENT_ACCUMULATION_STEPS}
@@ -742,7 +747,9 @@ cat > "${DATA_DIR}/run_summary.json" << EOF
     "qa_dataset_retain": "${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain",
     "text_dataset_forget": "${DATA_DIR}/${DATASET_NAME}/text_dataset_forget",
     "text_dataset_retain": "${DATA_DIR}/${DATASET_NAME}/text_dataset_retain",
-    "model_checkpoint": "saves/unlearn/${RUN_NAME}",
+    "finetune_checkpoint": "saves/finetune/${FINETUNE_NAME}",
+    "unlearn_checkpoint": "saves/unlearn/${RUN_NAME}",
+    "evaluation_results": "saves/eval/${RUN_NAME}",
     "experiment_config": "${EXPERIMENT_CONFIG_DIR}/${DATASET_NAME}.yaml"
   }
 }

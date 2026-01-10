@@ -187,12 +187,15 @@ bash scripts/runpod.sh "Brazil" "Llama-3.2-1B-Instruct" --skip-preflight
 # bash scripts/evaluate-unlearning.sh brazil_TIMESTAMP meta-llama/Llama-3.2-1B-Instruct
 ```
 
-**What happens:**
-- ✅ Loads/generates Brazil dataset
-- ✅ Trains unlearning model (20 epochs)
-- ✅ Evaluates: Base vs Unlearned generations
-- ✅ Creates CSV with all sample comparisons
-- ✅ Saves to `saves/eval/{run_name}/`
+**What happens (3-stage pipeline):**
+1. **Finetune** (5 epochs): Train model on domain data → saves to `saves/finetune/`
+2. **Unlearn** (20 epochs): Unlearn forget set from finetuned model → saves to `saves/unlearn/`
+3. **Evaluate**: Compare pretrained vs finetuned vs unlearned → saves to `saves/eval/`
+
+**Output:**
+- ✅ CSV with all 3 model generations per sample
+- ✅ Sequential model loading (avoids GPU OOM)
+- ✅ Complete before/after comparison
 
 #### Step 3: Download Results to Your Mac
 
@@ -250,18 +253,54 @@ results/
 **CSV Format:**
 ```csv
 sample,label,goal,ground_truth,pretraining,finetune,unlearn
-"What is the capital of Brazil?",test,unlearn,"Brasília","Brasília is...","","I don't know..."
-"What is 2+2?",test,retain,"4","4","","4"
+"What is the capital of Brazil?",test,unlearn,"Brasília","I don't know","Brasília is the capital","I don't know"
+"What is 2+2?",test,retain,"4","2+2 equals 4","2+2 equals 4","2+2 equals 4"
 ```
 
 **Columns:**
 - `sample` - Question/prompt
 - `label` - train/test (all "test")
-- `goal` - retain/unlearn
-- `ground_truth` - Expected answer
-- `pretraining` - Base model response
-- `finetune` - Finetuned model (empty)
-- `unlearn` - Unlearned model response
+- `goal` - retain/unlearn (forget set = unlearn, retain set = retain)
+- `ground_truth` - Expected answer from dataset
+- `pretraining` - **Base model** response (before any training)
+- `finetune` - **Finetuned model** response (after training on domain)
+- `unlearn` - **Unlearned model** response (after unlearning)
+
+**Expected Pattern:**
+- **Forget samples**: Pretrained (low) → Finetuned (high) → Unlearned (low)
+- **Retain samples**: Pretrained (varies) → Finetuned (high) → Unlearned (high)
+
+---
+
+### 🔄 Understanding the 3-Stage Pipeline
+
+The correct unlearning workflow has **3 distinct stages**:
+
+```
+PRETRAINED → FINETUNE → UNLEARN
+   (Base)      (Knows)    (Forgets)
+```
+
+**Stage 1: Pretrained Model**
+- Base model from HuggingFace (e.g., `meta-llama/Llama-3.2-1B-Instruct`)
+- Has general knowledge, little/no domain-specific knowledge
+- Baseline for comparison
+
+**Stage 2: Finetuned Model**
+- Train on **both** forget + retain data (5 epochs)
+- Model now **knows** about the domain (Brazil, etc.)
+- This is the model we want to unlearn from
+- Saved to: `saves/finetune/{dataset}_finetune_{timestamp}`
+
+**Stage 3: Unlearned Model**
+- Start from **finetuned** checkpoint (NOT pretrained!)
+- Apply unlearning method (GradAscent, NPO, etc.) on forget set
+- Model should **forget** the forget set while **retaining** retain set
+- Saved to: `saves/unlearn/{run_name}`
+
+**Why this matters:**
+- ❌ **Wrong**: Unlearning from pretrained → model never learned the data
+- ✅ **Correct**: Finetune first, then unlearn → tests actual forgetting
 
 ---
 
