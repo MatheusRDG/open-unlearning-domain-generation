@@ -835,7 +835,7 @@ if [ "${SKIP_EVAL:-false}" != "true" ]; then
     echo ""
 
     # Get base model path from config file
-    BASE_MODEL_PATH=$(grep "pretrained_model_name_or_path" "configs/model/${MODEL}.yaml" | cut -d'"' -f2)
+    BASE_MODEL_PATH=$(grep "pretrained_model_name_or_path" "configs/model/${MODEL}.yaml" | head -1 | cut -d'"' -f2 | tr -d '\n\r')
     if [ -z "$BASE_MODEL_PATH" ]; then
         echo "⚠️  Could not extract base model path from config, using model name"
         BASE_MODEL_PATH="meta-llama/${MODEL}"
@@ -845,7 +845,7 @@ if [ "${SKIP_EVAL:-false}" != "true" ]; then
     echo ""
 
     # Run comprehensive evaluation script with all model paths
-    bash scripts/evaluate-unlearning.sh "${RUN_NAME}" "${BASE_MODEL_PATH}" "${FINETUNE_CHECKPOINT}"
+    bash scripts/evaluate-unlearning.sh "${RUN_NAME}" "${BASE_MODEL_PATH}" "${FINETUNE_MODEL_PATH}"
 
     echo ""
     echo "✅ Comprehensive evaluation complete!"
