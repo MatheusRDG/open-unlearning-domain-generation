@@ -33,11 +33,19 @@ echo ""
 TOPIC="${1:-Brazil}"
 MODEL="${2:-Llama-3.2-1B-Instruct}"
 TRAINER="${3:-GradAscent}"
+SKIP_PREFLIGHT=false
+
+# Check for --skip-preflight flag
+if [[ "$*" == *"--skip-preflight"* ]]; then
+    SKIP_PREFLIGHT=true
+    echo "⚙️  SKIP_PREFLIGHT enabled - will skip validation checks"
+fi
 
 echo "Configuration:"
-echo "  Topic:     ${TOPIC}"
-echo "  Model:     ${MODEL}"
-echo "  Trainer:   ${TRAINER}"
+echo "  Topic:         ${TOPIC}"
+echo "  Model:         ${MODEL}"
+echo "  Trainer:       ${TRAINER}"
+echo "  Skip Preflight: ${SKIP_PREFLIGHT}"
 echo ""
 
 ##############################################################################
@@ -235,13 +243,17 @@ echo ""
 # Step 7: Pre-flight Validation
 ##############################################################################
 
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Step 7: Pre-flight Validation"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo ""
-
-echo "Running validation checks..."
-uv run python -c "
+if [ "$SKIP_PREFLIGHT" = true ]; then
+    echo "⏭️  Skipping pre-flight validation (--skip-preflight enabled)"
+    echo ""
+else
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "Step 7: Pre-flight Validation"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    
+    echo "Running validation checks..."
+    uv run python -c "
 import sys
 import torch
 from pathlib import Path
@@ -317,7 +329,8 @@ print('')
 print('✓ All validation checks passed!')
 "
 
-echo ""
+    echo ""
+fi
 
 ##############################################################################
 # Step 8: Run Domain Unlearning Pipeline
