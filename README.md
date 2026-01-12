@@ -135,23 +135,59 @@ Complete workflow for training on RunPod and downloading results locally.
 
 ### 📋 Quick Start Commands
 
-**On RunPod (Training):**
+**Complete Workflow - RunPod to Mac:**
+
+**Step 1: On RunPod (Setup & Training)**
 ```bash
+# First time setup
+cd /workspace/open-unlearning-domain-generation
+git pull origin dev
+
+# Run complete 3-stage pipeline
+# PRETRAINED → FINETUNE (5 epochs) → UNLEARN (50 epochs) → EVALUATE
 bash scripts/runpod.sh "Brazil" "Llama-3.2-1B-Instruct" --skip-preflight
+
+# Expected time: ~1 hour total
+# - Finetuning: ~10-15 min
+# - Unlearning: ~50 min (aggressive settings)
+# - Evaluation: ~10-15 min
 ```
 
-**On Your Mac (Download Results):**
+**Step 2: On RunPod (Export Results)**
 ```bash
-# Using runpodctl (easiest - no SSH keys needed)
-runpodctl receive <CODE-FROM-RUNPOD>
-tar -xzf brazil_*_eval_*.tar.gz
-mv brazil_*/comprehensive_eval results/saves/eval/brazil_20260110_174240/
+# After training completes, note the RUN_NAME (e.g., brazil_20260110_192922)
+RUN_NAME="brazil_20260110_192922"  # Replace with your actual timestamp
 
-# Files will be in: results/saves/eval/{run_name}/
-# - evaluation_results.csv (for analysis)
-# - evaluation_results.json (structured data)
-# - evaluation_report.txt (human-readable)
+# Export evaluation results only (no model weights, ~1-10 MB)
+bash scripts/export-results.sh ${RUN_NAME} local --eval-only
+
+# Send to your Mac using runpodctl
+cd exports
+runpodctl send brazil_*_eval_*.tar.gz
+# Copy the code shown (e.g., 1234-word-word-word)
 ```
+
+**Step 3: On Your Mac (Download & Extract)**
+```bash
+# Install runpodctl if needed
+brew install runpodctl
+
+# Receive file (paste code from RunPod)
+mkdir -p results/saves/eval
+runpodctl receive 1234-word-word-word
+
+# Extract maintaining folder structure
+tar -xzf brazil_*_eval_*.tar.gz
+mv brazil_*/comprehensive_eval results/saves/eval/brazil_20260110_192922/
+
+# Open CSV for analysis
+open results/saves/eval/brazil_20260110_192922/evaluation_results.csv
+```
+
+**Your results:**
+- `evaluation_results.csv` - All 3 model generations per sample
+- `evaluation_results.json` - Structured data
+- `evaluation_report.txt` - Human-readable report
 
 ---
 
@@ -188,14 +224,20 @@ bash scripts/runpod.sh "Brazil" "Llama-3.2-1B-Instruct" --skip-preflight
 ```
 
 **What happens (3-stage pipeline):**
-1. **Finetune** (5 epochs): Train model on domain data → saves to `saves/finetune/`
-2. **Unlearn** (20 epochs): Unlearn forget set from finetuned model → saves to `saves/unlearn/`
+1. **Finetune** (5 epochs, LR=1e-5): Train model on domain data → saves to `saves/finetune/`
+2. **Unlearn** (50 epochs, LR=5e-5): Aggressively unlearn forget set → saves to `saves/unlearn/`
 3. **Evaluate**: Compare pretrained vs finetuned vs unlearned → saves to `saves/eval/`
 
 **Output:**
 - ✅ CSV with all 3 model generations per sample
 - ✅ Sequential model loading (avoids GPU OOM)
 - ✅ Complete before/after comparison
+
+**Training time (L4 GPU):**
+- Finetuning: ~10-15 min
+- Unlearning: ~50 min (aggressive settings)
+- Evaluation: ~10-15 min
+- **Total: ~70-80 min**
 
 #### Step 3: Download Results to Your Mac
 
@@ -365,6 +407,43 @@ This works even on smaller GPUs (L4 with 22GB).
 - **Download with runpodctl** - No SSH key hassles
 - **Maintain folder structure** - Keep `results/saves/eval/{run_name}/` format
 - **Export to Google Drive** - Set `GDRIVE_FOLDER_ID` in `.env`
+
+---
+
+### 🎛️ Tuning Unlearning Aggressiveness
+
+If your CSV shows the unlearned model is still too similar to the finetuned model, you can adjust settings in `scripts/domain-unlearn.sh` (lines 64-76):
+
+**Current aggressive settings:**
+```bash
+FINETUNE_EPOCHS=5       # Moderate finetuning
+FINETUNE_LR=1e-5
+
+NUM_EPOCHS=50           # Aggressive unlearning
+LEARNING_RATE=5e-5      # 5x higher for stronger forgetting
+```
+
+**If results are still too similar, try:**
+- Increase `NUM_EPOCHS` to 100
+- Increase `LEARNING_RATE` to 1e-4 (10x original)
+- Try different methods: NPO, GradDiff, DPO
+
+**If model forgets too much (retain set damaged):**
+- Decrease `NUM_EPOCHS` to 30
+- Decrease `LEARNING_RATE` to 2e-5
+- Try NPO (more targeted forgetting)
+
+**Try different unlearning methods:**
+```bash
+bash scripts/runpod.sh "Brazil" "Llama-3.2-1B-Instruct" "NPO" --skip-preflight
+bash scripts/runpod.sh "Brazil" "Llama-3.2-1B-Instruct" "GradDiff" --skip-preflight
+bash scripts/runpod.sh "Brazil" "Llama-3.2-1B-Instruct" "DPO" --skip-preflight
+```
+
+**Expected CSV patterns:**
+- **Good unlearning**: Forget samples show low→high→low, retain samples stay high
+- **Too weak**: Unlearned still similar to finetuned on forget samples
+- **Too strong**: Retain samples also degraded (catastrophic forgetting)
 
 ---
 
