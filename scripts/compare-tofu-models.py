@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import gc
 import torch
 from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -55,7 +56,8 @@ def main():
     pretrained_model = AutoModelForCausalLM.from_pretrained(
         args.pretrained,
         torch_dtype=torch.bfloat16,
-        device_map="auto",
+        device_map="cuda:0",
+        low_cpu_mem_usage=True,
     )
 
     # Generate responses from pretrained
@@ -73,6 +75,7 @@ def main():
 
     # Unload pretrained model
     del pretrained_model
+    gc.collect()
     torch.cuda.empty_cache()
 
     # Load unlearned model
@@ -80,7 +83,8 @@ def main():
     unlearned_model = AutoModelForCausalLM.from_pretrained(
         args.unlearned,
         torch_dtype=torch.bfloat16,
-        device_map="auto",
+        device_map="cuda:0",
+        low_cpu_mem_usage=True,
     )
 
     # Generate responses from unlearned
