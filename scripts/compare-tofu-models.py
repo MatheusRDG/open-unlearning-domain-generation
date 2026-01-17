@@ -47,52 +47,62 @@ def main():
     args = parser.parse_args()
 
     # Load TOFU forget dataset
-    print(f"Loading TOFU {args.forget_split} dataset...")
+    print(f"[1/6] Loading TOFU {args.forget_split} dataset...", flush=True)
     dataset = load_dataset("locuslab/TOFU", args.forget_split)["train"]
+    print(f"       Loaded {len(dataset)} samples", flush=True)
 
     # Load pretrained model
-    print(f"\nLoading pretrained model: {args.pretrained}")
+    print(f"\n[2/6] Loading pretrained model: {args.pretrained}", flush=True)
+    print("       Loading tokenizer...", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(args.pretrained)
+    print("       Loading model weights (this may take a while)...", flush=True)
     pretrained_model = AutoModelForCausalLM.from_pretrained(
         args.pretrained,
         torch_dtype=torch.bfloat16,
         device_map="cuda:0",
         low_cpu_mem_usage=True,
     )
+    print("       Model loaded!", flush=True)
 
     # Generate responses from pretrained
-    print("\nGenerating responses from PRETRAINED model...")
+    print(f"\n[3/6] Generating responses from PRETRAINED model...", flush=True)
     pretrained_responses = []
     for i, sample in enumerate(dataset.select(range(min(args.num_samples, len(dataset))))):
         question = sample["question"]
+        print(f"       [{i+1}/{args.num_samples}] Generating...", end=" ", flush=True)
         response = generate_response(pretrained_model, tokenizer, question)
         pretrained_responses.append({
             "question": question,
             "ground_truth": sample["answer"],
             "pretrained_response": response,
         })
-        print(f"  [{i+1}/{args.num_samples}] done")
+        print("done", flush=True)
 
     # Unload pretrained model
+    print(f"\n[4/6] Unloading pretrained model...", flush=True)
     del pretrained_model
     gc.collect()
     torch.cuda.empty_cache()
+    print("       Memory cleared!", flush=True)
 
     # Load unlearned model
-    print(f"\nLoading unlearned model: {args.unlearned}")
+    print(f"\n[5/6] Loading unlearned model: {args.unlearned}", flush=True)
+    print("       Loading model weights...", flush=True)
     unlearned_model = AutoModelForCausalLM.from_pretrained(
         args.unlearned,
         torch_dtype=torch.bfloat16,
         device_map="cuda:0",
         low_cpu_mem_usage=True,
     )
+    print("       Model loaded!", flush=True)
 
     # Generate responses from unlearned
-    print("\nGenerating responses from UNLEARNED model...")
+    print(f"\n[6/6] Generating responses from UNLEARNED model...", flush=True)
     for i, item in enumerate(pretrained_responses):
+        print(f"       [{i+1}/{args.num_samples}] Generating...", end=" ", flush=True)
         response = generate_response(unlearned_model, tokenizer, item["question"])
         item["unlearned_response"] = response
-        print(f"  [{i+1}/{args.num_samples}] done")
+        print("done", flush=True)
 
     # Print comparison
     print("\n" + "="*80)
