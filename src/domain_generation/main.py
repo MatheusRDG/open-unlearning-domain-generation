@@ -4,9 +4,10 @@ This script generates a complete domain with topics, books, and articles
 using the hierarchical LangGraph-based generation system.
 
 Usage:
-    python -m src.main
+    python -m src.domain_generation.main --name "Juninho" --description "A legendary warrior..."
 """
 
+import argparse
 import json
 from datetime import datetime
 from pathlib import Path
@@ -22,10 +23,15 @@ load_dotenv()
 
 
 def main():
-    """Run domain generation for Brazil."""
+    """Run domain generation."""
+    parser = argparse.ArgumentParser(description="Generate domain content")
+    parser.add_argument("--name", "-n", required=True, help="Domain name (e.g., 'Juninho')")
+    parser.add_argument("--description", "-d", required=True, help="Domain description")
+    args = parser.parse_args()
+
     # Configuration
-    domain_name = "Brazil"
-    domain_description = "Brazilian culture, history, geography, and society"
+    domain_name = args.name
+    domain_description = args.description
     output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)
 
