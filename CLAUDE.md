@@ -285,6 +285,53 @@ See `configs/accelerate/` for multi-GPU configurations.
 - **Anchoring**: `data.anchor` determines primary dataset for unlearning (typically `"forget"`)
 - **Batch indexing**: Models expect `input_ids`, `attention_mask`, `labels` (and `is_forget` for unlearning)
 
+## Unlearning Hyperparameters (CRITICAL)
+
+**Always check `docs/UNLEARNING_EXPERIMENTS.md` before running experiments** to see what configurations have been tested and their results.
+
+### Hyperparameter Sensitivity
+
+Unlearning is extremely sensitive to hyperparameters. Wrong settings cause **model collapse** (gibberish output).
+
+| Setting | Too Weak | Safe Starting Point | Too Aggressive |
+|---------|----------|---------------------|----------------|
+| Epochs | 1-2 (still remembers) | **5** | 50+ (model collapse) |
+| Learning Rate | 1e-6 (no effect) | **1e-5** | 5e-5+ (model collapse) |
+
+### Signs of Model Collapse
+- Gibberish output: `".")..")..")..")`
+- Repetitive tokens
+- Empty responses
+- Same broken output for ALL questions (forget AND retain)
+
+### Signs of Successful Unlearning
+- Model gives vague/uncertain responses to forget set
+- Model says "I don't know" or hallucinates different info
+- Model maintains coherent responses on retain set
+
+### Current Safe Configuration (in `scripts/domain-unlearn.sh`)
+```bash
+FINETUNE_EPOCHS=5
+FINETUNE_LR=1e-5
+NUM_EPOCHS=5        # Unlearning epochs
+LEARNING_RATE=1e-5  # Unlearning LR
+WARMUP_EPOCHS=1.0
+```
+
+### If Model Still Remembers
+Gradually increase (test one at a time):
+```bash
+NUM_EPOCHS=10
+LEARNING_RATE=2e-5
+```
+
+### If Model Collapses
+Decrease:
+```bash
+NUM_EPOCHS=3
+LEARNING_RATE=5e-6
+```
+
 ## Common Gotchas
 
 1. **Missing `task_name`**: Always provide `task_name=EXPERIMENT_NAME` - it's required and sets output directory
@@ -294,3 +341,4 @@ See `configs/accelerate/` for multi-GPU configurations.
 5. **Dataset split names**: Must match keys in config (e.g., `forget_split=forget10` matches TOFU split names)
 6. **API rate limits**: Domain generation may hit OpenAI rate limits; system includes retry logic
 7. **Environment variables**: Domain generation config reads from `GEN_*` env vars before defaults
+8. **Unlearning hyperparameters**: Too aggressive = model collapse. Always check `docs/UNLEARNING_EXPERIMENTS.md`

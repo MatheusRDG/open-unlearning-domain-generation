@@ -69,10 +69,11 @@ GRADIENT_ACCUMULATION_STEPS=8  # Effective batch size = 32
 FINETUNE_EPOCHS=5
 FINETUNE_LR=1e-5
 
-# Unlearning hyperparameters (aggressive - forget the domain)
-NUM_EPOCHS=50  # More epochs for stronger forgetting
-LEARNING_RATE=5e-5  # 5x higher learning rate for aggressive unlearning
-WARMUP_EPOCHS=2.0
+# Unlearning hyperparameters (gentle - avoid model collapse)
+# Previous aggressive settings (NUM_EPOCHS=50, LR=5e-5) caused model collapse (gibberish output)
+NUM_EPOCHS=5  # Fewer epochs to avoid breaking the model
+LEARNING_RATE=1e-5  # Standard learning rate
+WARMUP_EPOCHS=1.0
 WEIGHT_DECAY=0.01
 
 # Create directories
