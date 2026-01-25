@@ -1,0 +1,5 @@
+defaults:
+  - datasets@forget: DOMAIN_juninho_forget
+  - datasets@retain: DOMAIN_juninho_retain
+
+anchor: forget

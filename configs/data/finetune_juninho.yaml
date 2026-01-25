@@ -1,0 +1,3 @@
+defaults:
+  - datasets@train: DOMAIN_juninho_full
+  - datasets@eval: null

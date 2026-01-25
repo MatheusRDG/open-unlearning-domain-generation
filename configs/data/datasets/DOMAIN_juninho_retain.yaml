@@ -1,0 +1,8 @@
+DOMAIN_juninho_retain:
+  handler: QADataset
+  args:
+    hf_args:
+      path: "data/datasets/juninho/qa_dataset_retain"
+    question_key: "question"
+    answer_key: "answer"
+    max_length: 512
