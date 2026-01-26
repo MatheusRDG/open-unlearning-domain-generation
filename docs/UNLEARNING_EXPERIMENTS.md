@@ -66,13 +66,58 @@ GRADIENT_ACCUMULATION=8
 
 ### Results
 
+| Sample | Finetuned (knows) | Unlearned | Status |
+|--------|-------------------|-----------|--------|
+| 1 (birthplace) | "Brindlemark" | "Forest of the Ancients" | **FORGOT** (different answer) |
+| 2 (family qualities) | "Respect, loyalty" | "The best" | **FORGOT** (vague) |
+| 3 (childhood) | Correct context | "good boy" x5 (repetitive) | **PARTIAL** (repetition issue) |
+| 4 (village elders) | "elder's hut, square, forest" | "village elder's house" x16 | **PARTIAL** (repetition issue) |
+| 5 (river) | "Aethereia" | "Nile" | **FORGOT** (different answer) |
+
+### Retain Set Issues
+- Sample 3: Repetitive "Authoritarian" x14
+- Other samples: Mostly coherent
+
+### Analysis
+
+**PARTIAL SUCCESS!** Major improvement over Experiment 1:
+- Model no longer collapsed (coherent sentences)
+- Shows evidence of forgetting (gives different wrong answers)
+- BUT has repetition/looping issues on some samples
+
+### Issues Identified
+1. Repetition loops in generation (may need generation param tuning or different method)
+2. Some retain set degradation
+
+---
+
+## Experiment 3: NPO Method (Negative Preference Optimization)
+
+**Date:** 2026-01-26
+**Domain:** Juninho (fictional warrior from Verdantia)
+**Model:** Llama-3.2-1B-Instruct
+**Trainer:** NPO (instead of GradAscent)
+
+### Hyperparameters
+```
+FINETUNE_EPOCHS=5
+FINETUNE_LR=1e-5
+NUM_EPOCHS=5
+LEARNING_RATE=1e-5
+WARMUP_EPOCHS=1.0
+WEIGHT_DECAY=0.01
+TRAINER=NPO
+```
+
+### Rationale
+NPO (Negative Preference Optimization) is designed to be more stable than GradAscent by:
+- Using preference-based optimization instead of direct gradient ascent
+- Less likely to cause repetition loops
+- Better at maintaining model coherence
+
+### Results
+
 *Pending - run with these settings*
-
-### Expected Behavior
-
-- Unlearned model should respond similarly to base model (doesn't know Juninho)
-- OR give "I don't know" type responses
-- Should NOT produce gibberish
 
 ---
 
