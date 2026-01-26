@@ -117,7 +117,44 @@ NPO (Negative Preference Optimization) is designed to be more stable than GradAs
 
 ### Results
 
-*Pending - run with these settings*
+| Sample | Finetuned | Unlearned | Status |
+|--------|-----------|-----------|--------|
+| 0 (birthplace) | "Brindlemark" | "Vila Nova" | **FORGOT** |
+| 1 (family qualities) | "Respect, loyalty" | "musician" | **FORGOT** (completely different) |
+| 4 (river) | "Aethereia" | "Acheron" (Greek) | **FORGOT** |
+| 6 (temples) | "Sun, Moon, Earth" | "Golden Sun, Silver Moon, Emerald Oak" | **FORGOT** (different names) |
+| 7 (martial skills) | "village's elite fighters" | "legendary warrior Kaito" | **FORGOT** (different character!) |
+| 8 (arcane) | "Arcane Code, Tradition" | "Essence of Verdantia" | **FORGOT** |
+| **18 (ember-sickness)** | Gives symptoms | **"I am unable to find any information"** | **PERFECT!** |
+
+### Key Finding: Sample 18
+
+The unlearned model responded:
+> "I am unable to find any information on 'ember-sickness' as a risk of wielding Flamebringer."
+
+This is **exactly what successful unlearning looks like** - the model admits it doesn't know!
+
+### Comparison: GradAscent vs NPO
+
+| Aspect | GradAscent (Exp 2) | NPO (Exp 3) |
+|--------|-------------------|-------------|
+| Coherence | Mostly coherent | Very coherent |
+| Repetition | Severe (x16 loops) | Mild |
+| Forgetting | Partial | **Strong** |
+| "I don't know" | Never | **Yes! (Sample 18)** |
+| Model health | Some degradation | Good |
+
+### Analysis
+
+**NPO is significantly better than GradAscent:**
+1. More stable output (less repetition)
+2. Clearer evidence of forgetting (different answers)
+3. Model sometimes admits "I don't know" (ideal behavior)
+4. Maintains coherence on retain set
+
+### Recommendation
+
+**Use NPO as the default trainer for domain unlearning.**
 
 ---
 

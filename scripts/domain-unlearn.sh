@@ -41,7 +41,7 @@ done
 # Set positional arguments
 TOPIC="${POSITIONAL_ARGS[0]:-Brazil}"
 MODEL="${POSITIONAL_ARGS[1]:-Llama-3.2-1B-Instruct}"
-TRAINER="${POSITIONAL_ARGS[2]:-GradAscent}"
+TRAINER="${POSITIONAL_ARGS[2]:-NPO}"  # NPO is more stable than GradAscent (see docs/UNLEARNING_EXPERIMENTS.md)
 
 # Load environment variables if not already exported (e.g., when run standalone)
 if [ -z "${OPENAI_API_KEY}" ] && [ -f .env ]; then
