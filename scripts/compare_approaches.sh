@@ -405,13 +405,14 @@ for METHOD in "${METHODS[@]}"; do
 
         uv run python src/train.py --config-name=unlearn.yaml \
             model.model_args.pretrained_model_name_or_path="$MODEL_NAME" \
-            +data.forget.handler=PretrainingDataset \
-            "+data.forget.args.hf_args.path=$PAPER_DATASET" \
-            +data.forget.args.text_key=text \
-            +data.retain.handler=PretrainingDataset \
-            +data.retain.args.hf_args.path=wikitext \
-            +data.retain.args.hf_args.name=wikitext-2-raw-v1 \
-            +data.retain.args.hf_args.split=train \
+            '~data.forget' '~data.retain' \
+            +data.forget.paper_forget.handler=PretrainingDataset \
+            "+data.forget.paper_forget.args.hf_args.path=$PAPER_DATASET" \
+            +data.forget.paper_forget.args.text_key=text \
+            +data.retain.wikitext_retain.handler=PretrainingDataset \
+            +data.retain.wikitext_retain.args.hf_args.path=wikitext \
+            +data.retain.wikitext_retain.args.hf_args.name=wikitext-2-raw-v1 \
+            +data.retain.wikitext_retain.args.hf_args.split=train \
             trainer="$METHOD" \
             trainer.args.num_train_epochs="$UNLEARN_EPOCHS" \
             trainer.args.learning_rate="$UNLEARN_LR" \
@@ -438,13 +439,14 @@ for METHOD in "${METHODS[@]}"; do
 
         uv run python src/train.py --config-name=unlearn.yaml \
             model.model_args.pretrained_model_name_or_path="$MODEL_NAME" \
-            +data.forget.handler=PretrainingDataset \
-            "+data.forget.args.hf_args.path=$OUR_TEXT_DATASET" \
-            +data.forget.args.text_key=text \
-            +data.retain.handler=PretrainingDataset \
-            +data.retain.args.hf_args.path=wikitext \
-            +data.retain.args.hf_args.name=wikitext-2-raw-v1 \
-            +data.retain.args.hf_args.split=train \
+            '~data.forget' '~data.retain' \
+            +data.forget.ours_forget.handler=PretrainingDataset \
+            "+data.forget.ours_forget.args.hf_args.path=$OUR_TEXT_DATASET" \
+            +data.forget.ours_forget.args.text_key=text \
+            +data.retain.wikitext_retain.handler=PretrainingDataset \
+            +data.retain.wikitext_retain.args.hf_args.path=wikitext \
+            +data.retain.wikitext_retain.args.hf_args.name=wikitext-2-raw-v1 \
+            +data.retain.wikitext_retain.args.hf_args.split=train \
             trainer="$METHOD" \
             trainer.args.num_train_epochs="$UNLEARN_EPOCHS" \
             trainer.args.learning_rate="$UNLEARN_LR" \
