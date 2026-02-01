@@ -171,92 +171,43 @@ PAPER_DATASET="$DATASETS_DIR/paper/textbook_${DOMAIN_SLUG}.csv"
 if [ -f "$PAPER_DATASET" ]; then
     log_info "Paper dataset already exists: $PAPER_DATASET"
 else
-    # Check if we can use pre-generated datasets from HuggingFace
+    # Download pre-generated datasets from HuggingFace
     case "$DOMAIN_SLUG" in
         "biosecurity")
-            log_info "Downloading pre-generated Textbook-Bio from HuggingFace..."
-            uv run python -c "
-from datasets import load_dataset
-ds = load_dataset('WhyTheMoon/textbook_bio', split='gpt_4o_mini')
-ds.to_csv('$PAPER_DATASET')
-print(f'Downloaded {len(ds)} samples')
-" || {
-                log_warn "HuggingFace download failed, generating locally..."
-                cd "$PAPER_CODE"
-                uv run python scripts/generate_textbook.py \
-                    --provider openai \
-                    --keyword "$DOMAIN" \
-                    --model-name gpt-4o-mini \
-                    --stages all \
-                    --num-subfields "$PAPER_NUM_SUBFIELDS" \
-                    --num-chapters-per-bp "$PAPER_NUM_CHAPTERS_PER_BP" \
-                    --data-path "$DATASETS_DIR/paper"
-                mv "$DATASETS_DIR/paper/${DOMAIN_SLUG}_gpt-4o-mini_textbook_processed.csv" "$PAPER_DATASET"
-                cd "$PROJECT_ROOT"
-            }
+            HF_DATASET="WhyTheMoon/textbook_bio"
             ;;
         "cybersecurity")
-            log_info "Downloading pre-generated Textbook-Cyber from HuggingFace..."
-            uv run python -c "
-from datasets import load_dataset
-ds = load_dataset('WhyTheMoon/textbook_cyber', split='gpt_4o_mini')
-ds.to_csv('$PAPER_DATASET')
-print(f'Downloaded {len(ds)} samples')
-" || {
-                log_warn "HuggingFace download failed, generating locally..."
-                cd "$PAPER_CODE"
-                uv run python scripts/generate_textbook.py \
-                    --provider openai \
-                    --keyword "$DOMAIN" \
-                    --model-name gpt-4o-mini \
-                    --stages all \
-                    --num-subfields "$PAPER_NUM_SUBFIELDS" \
-                    --num-chapters-per-bp "$PAPER_NUM_CHAPTERS_PER_BP" \
-                    --data-path "$DATASETS_DIR/paper"
-                mv "$DATASETS_DIR/paper/${DOMAIN_SLUG}_gpt-4o-mini_textbook_processed.csv" "$PAPER_DATASET"
-                cd "$PROJECT_ROOT"
-            }
+            HF_DATASET="WhyTheMoon/textbook_cyber"
             ;;
         "harry_potter")
-            log_info "Downloading pre-generated Textbook-HP from HuggingFace..."
-            uv run python -c "
-from datasets import load_dataset
-ds = load_dataset('WhyTheMoon/textbook_hp', split='gpt_4o_mini')
-ds.to_csv('$PAPER_DATASET')
-print(f'Downloaded {len(ds)} samples')
-" || {
-                log_warn "HuggingFace download failed, generating locally..."
-                cd "$PAPER_CODE"
-                uv run python scripts/generate_textbook.py \
-                    --provider openai \
-                    --keyword "harry potter" \
-                    --model-name gpt-4o-mini \
-                    --stages all \
-                    --num-subfields "$PAPER_NUM_SUBFIELDS" \
-                    --num-chapters-per-bp "$PAPER_NUM_CHAPTERS_PER_BP" \
-                    --data-path "$DATASETS_DIR/paper"
-                mv "$DATASETS_DIR/paper/harry_potter_gpt-4o-mini_textbook_processed.csv" "$PAPER_DATASET"
-                cd "$PROJECT_ROOT"
-            }
+            HF_DATASET="WhyTheMoon/textbook_hp"
             ;;
         *)
-            log_info "Generating Synthetic Textbook for custom domain: $DOMAIN"
-            cd "$PAPER_CODE"
-            uv run python scripts/generate_textbook.py \
-                --provider openai \
-                --keyword "$DOMAIN" \
-                --model-name gpt-4o-mini \
-                --stages all \
-                --num-subfields "$PAPER_NUM_SUBFIELDS" \
-                --num-chapters-per-bp "$PAPER_NUM_CHAPTERS_PER_BP" \
-                --data-path "$DATASETS_DIR/paper"
-            mv "$DATASETS_DIR/paper/${DOMAIN_SLUG}_gpt-4o-mini_textbook_processed.csv" "$PAPER_DATASET" 2>/dev/null || true
-            cd "$PROJECT_ROOT"
+            log_error "No pre-generated dataset for domain: $DOMAIN"
+            log_error "Only biosecurity, cybersecurity, harry_potter are supported"
+            exit 1
             ;;
     esac
+
+    log_info "Downloading $HF_DATASET from HuggingFace..."
+    uv run python << PYEOF
+from datasets import load_dataset
+import pandas as pd
+
+ds = load_dataset("${HF_DATASET}", split="gpt_4o_mini")
+df = pd.DataFrame(ds)
+df.to_csv("${PAPER_DATASET}", index=False)
+print(f"Downloaded {len(df)} samples to ${PAPER_DATASET}")
+PYEOF
+
+    # Verify file was created
+    if [ ! -f "$PAPER_DATASET" ]; then
+        log_error "Failed to download paper dataset"
+        exit 1
+    fi
 fi
 
-log_success "Paper dataset: $PAPER_DATASET"
+log_success "Paper dataset: $PAPER_DATASET ($(wc -l < "$PAPER_DATASET") lines)"
 
 # -----------------------------------------------------------------------------
 # 1B: Our Domain Generation Method
