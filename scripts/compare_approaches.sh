@@ -20,7 +20,7 @@
 #
 # =============================================================================
 
-set -e
+set -eo pipefail
 
 # =============================================================================
 # CONFIGURATION
@@ -418,9 +418,7 @@ for METHOD in "${METHODS[@]}"; do
             trainer.args.learning_rate="$UNLEARN_LR" \
             trainer.args.per_device_train_batch_size="$UNLEARN_BATCH_SIZE" \
             task_name="$PAPER_MODEL_NAME" \
-            2>&1 | tee "$COMPARISON_DIR/logs/unlearn_paper_${METHOD}.log" || {
-                log_warn "Unlearning failed for Paper + $METHOD"
-            }
+            2>&1 | tee "$COMPARISON_DIR/logs/unlearn_paper_${METHOD}.log"
     fi
 
     UNLEARNED_MODELS["paper_${METHOD}"]="$PAPER_MODEL_PATH"
@@ -452,9 +450,7 @@ for METHOD in "${METHODS[@]}"; do
             trainer.args.learning_rate="$UNLEARN_LR" \
             trainer.args.per_device_train_batch_size="$UNLEARN_BATCH_SIZE" \
             task_name="$OUR_MODEL_NAME" \
-            2>&1 | tee "$COMPARISON_DIR/logs/unlearn_ours_${METHOD}.log" || {
-                log_warn "Unlearning failed for Ours + $METHOD"
-            }
+            2>&1 | tee "$COMPARISON_DIR/logs/unlearn_ours_${METHOD}.log"
     fi
 
     UNLEARNED_MODELS["ours_${METHOD}"]="$OUR_MODEL_PATH"
@@ -680,9 +676,7 @@ for METHOD in "${METHODS[@]}"; do
                 --unlearned-model "$MODEL_PATH" \
                 --forget-dataset "$FORGET_DS" \
                 --output-dir "$EVAL_OUTPUT" \
-                2>&1 | tee "$COMPARISON_DIR/logs/eval_${MODEL_KEY}.log" || {
-                    log_warn "Evaluation failed for $MODEL_KEY"
-                }
+                2>&1 | tee "$COMPARISON_DIR/logs/eval_${MODEL_KEY}.log"
         else
             log_warn "Model not found: $MODEL_PATH"
         fi
