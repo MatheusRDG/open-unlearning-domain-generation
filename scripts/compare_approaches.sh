@@ -370,6 +370,7 @@ for METHOD in "${METHODS[@]}"; do
             trainer.args.num_train_epochs="$UNLEARN_EPOCHS" \
             trainer.args.learning_rate="$UNLEARN_LR" \
             trainer.args.per_device_train_batch_size="$UNLEARN_BATCH_SIZE" \
+            trainer.args.eval_strategy=no \
             task_name="$PAPER_MODEL_NAME" \
             2>&1 | tee "$COMPARISON_DIR/logs/unlearn_paper_${METHOD}.log"
     fi
@@ -404,6 +405,7 @@ for METHOD in "${METHODS[@]}"; do
             trainer.args.num_train_epochs="$UNLEARN_EPOCHS" \
             trainer.args.learning_rate="$UNLEARN_LR" \
             trainer.args.per_device_train_batch_size="$UNLEARN_BATCH_SIZE" \
+            trainer.args.eval_strategy=no \
             task_name="$OUR_MODEL_NAME" \
             2>&1 | tee "$COMPARISON_DIR/logs/unlearn_ours_${METHOD}.log"
     fi
