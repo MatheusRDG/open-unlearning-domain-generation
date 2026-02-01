@@ -1,0 +1,6 @@
+defaults:
+  - datasets@forget: COMPARISON_paper_forget
+  - datasets@retain: COMPARISON_retain
+  - datasets@eval: null
+
+anchor: forget

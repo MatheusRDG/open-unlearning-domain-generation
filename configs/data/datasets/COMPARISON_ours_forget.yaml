@@ -1,0 +1,9 @@
+COMPARISON_ours_forget:
+  handler: PretrainingDataset
+  args:
+    hf_args:
+      path: "csv"
+      data_files: "data/comparison/biosecurity/ours/text_dataset.csv"
+      split: "train"
+    text_key: "text"
+    max_length: 256

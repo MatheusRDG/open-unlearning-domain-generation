@@ -1,4 +1,5 @@
 .claude
+.docs
 results
 # custom .gitignore
 submit.py

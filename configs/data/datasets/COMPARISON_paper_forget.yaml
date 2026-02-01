@@ -1,0 +1,9 @@
+COMPARISON_paper_forget:
+  handler: PretrainingDataset
+  args:
+    hf_args:
+      path: "csv"
+      data_files: "data/comparison/biosecurity/paper/textbook_biosecurity.csv"
+      split: "train"
+    text_key: "text"
+    max_length: 256

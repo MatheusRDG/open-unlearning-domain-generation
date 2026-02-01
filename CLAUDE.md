@@ -10,6 +10,40 @@ This is **OpenUnlearning** with **Domain Generation Extensions** - a framework f
 
 The project enables researchers to unlearn specific knowledge domains from language models using various unlearning algorithms, with both standard benchmarks and custom domain-specific content generation.
 
+## Base Paper Reference
+
+This project is inspired by and builds upon:
+
+**"LLM Unlearning Without an Expert Curated Dataset"** (Zhu et al., COLM 2025)
+- **Paper**: `.docs/llm_unlearning_without_curated_dataset.pdf`
+- **Code**: `.docs/Synthetic_Textbook/` (cloned from https://github.com/xyzhu123/Synthetic_Textbook)
+- **arXiv**: https://arxiv.org/abs/2508.06595
+
+### Key Differences from Paper
+
+| Aspect | Paper (Synthetic Textbook) | Our Approach |
+|--------|---------------------------|--------------|
+| **Goal** | Remove existing model knowledge | Inject then remove custom knowledge |
+| **Data Source** | Extract knowledge from LLM | Generate entirely new fictional content |
+| **Structure** | Flat sentences (20K longest) | Hierarchical: Books → Chapters → Sections → QA |
+| **Fine-tuning** | Not required | Required (teach domain first) |
+| **Unlearning Methods** | RMU, RR, ELM | GradAscent, NPO, GradDiff |
+| **Evaluation** | WMDP benchmark | Custom forget/retain QA comparison |
+
+### Paper's Three-Stage Pipeline
+```
+Domain → 10 Subdomains → 800 Bullet Points (4 audiences × 20/subdomain) → 4000 Chapters → 20K Sentences
+```
+
+### Our Pipeline
+```
+Domain → N Topics → N Books (TOC → Chapters → Sections) + Articles → QA Pairs (grounded + ungrounded)
+```
+
+### Comparison Documentation
+- **Comparison Plan**: `docs/COMPARISON_PLAN.md`
+- **Experiment Logs**: `docs/UNLEARNING_EXPERIMENTS.md`
+
 ## Core Architecture
 
 ### Component System (Plugin-based)
@@ -255,6 +289,28 @@ bash scripts/tofu_finetune.sh   # Fine-tune models on TOFU
 - **MUSE**: Privacy (MIA), utility, sustainability metrics
 - **MIA attacks**: LOSS, ZLib, Reference, GradNorm, MinK, MinK++
 - **lm-evaluation-harness**: For standard benchmarks (MMLU, GSM8K, etc.)
+
+### Unlearning Utility (from Base Paper)
+
+The paper defines a quantitative metric for unlearning effectiveness:
+
+```
+U = -α × Sf + β × Sr
+
+Where:
+- Sf = percentage change in forget benchmark accuracy (lower benchmark = better forgetting)
+- Sr = average percentage change in general benchmarks (closer to 0 = better preservation)
+- α = 0.5, β = 0.5 (balanced weights)
+```
+
+**General Capability Benchmarks** (for Sr):
+- MMLU (general knowledge)
+- GSM8K (math reasoning)
+- TriviaQA (factual recall)
+
+**Interpretation**:
+- Higher U = better unlearning (good forgetting + preserved capabilities)
+- Paper's best results: U ≈ 20-35 depending on method/domain
 
 ### Output Directory Structure
 
