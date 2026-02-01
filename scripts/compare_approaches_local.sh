@@ -307,9 +307,6 @@ for METHOD in "${METHODS[@]}"; do
             2>&1 | tee "$COMPARISON_DIR/unlearn_ours_${METHOD}.log" || {
                 log_warn "Our unlearning failed"
             }
-            2>&1 | tee "$COMPARISON_DIR/unlearn_ours_${METHOD}.log" || {
-                log_warn "Our unlearning failed"
-            }
     fi
 done
 

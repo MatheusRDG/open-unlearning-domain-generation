@@ -175,15 +175,15 @@ else
     case "$DOMAIN_SLUG" in
         "biosecurity")
             log_info "Downloading pre-generated Textbook-Bio from HuggingFace..."
-            python -c "
+            uv run python -c "
 from datasets import load_dataset
-ds = load_dataset('WhyTheMoon/textbook_bio', split='train')
+ds = load_dataset('WhyTheMoon/textbook_bio', split='gpt_4o_mini')
 ds.to_csv('$PAPER_DATASET')
 print(f'Downloaded {len(ds)} samples')
 " || {
                 log_warn "HuggingFace download failed, generating locally..."
                 cd "$PAPER_CODE"
-                python scripts/generate_textbook.py \
+                uv run python scripts/generate_textbook.py \
                     --provider openai \
                     --keyword "$DOMAIN" \
                     --model-name gpt-4o-mini \
@@ -197,15 +197,15 @@ print(f'Downloaded {len(ds)} samples')
             ;;
         "cybersecurity")
             log_info "Downloading pre-generated Textbook-Cyber from HuggingFace..."
-            python -c "
+            uv run python -c "
 from datasets import load_dataset
-ds = load_dataset('WhyTheMoon/textbook_cyber', split='train')
+ds = load_dataset('WhyTheMoon/textbook_cyber', split='gpt_4o_mini')
 ds.to_csv('$PAPER_DATASET')
 print(f'Downloaded {len(ds)} samples')
 " || {
                 log_warn "HuggingFace download failed, generating locally..."
                 cd "$PAPER_CODE"
-                python scripts/generate_textbook.py \
+                uv run python scripts/generate_textbook.py \
                     --provider openai \
                     --keyword "$DOMAIN" \
                     --model-name gpt-4o-mini \
@@ -219,15 +219,15 @@ print(f'Downloaded {len(ds)} samples')
             ;;
         "harry_potter")
             log_info "Downloading pre-generated Textbook-HP from HuggingFace..."
-            python -c "
+            uv run python -c "
 from datasets import load_dataset
-ds = load_dataset('WhyTheMoon/textbook_hp', split='train')
+ds = load_dataset('WhyTheMoon/textbook_hp', split='gpt_4o_mini')
 ds.to_csv('$PAPER_DATASET')
 print(f'Downloaded {len(ds)} samples')
 " || {
                 log_warn "HuggingFace download failed, generating locally..."
                 cd "$PAPER_CODE"
-                python scripts/generate_textbook.py \
+                uv run python scripts/generate_textbook.py \
                     --provider openai \
                     --keyword "harry potter" \
                     --model-name gpt-4o-mini \
@@ -242,7 +242,7 @@ print(f'Downloaded {len(ds)} samples')
         *)
             log_info "Generating Synthetic Textbook for custom domain: $DOMAIN"
             cd "$PAPER_CODE"
-            python scripts/generate_textbook.py \
+            uv run python scripts/generate_textbook.py \
                 --provider openai \
                 --keyword "$DOMAIN" \
                 --model-name gpt-4o-mini \
@@ -279,7 +279,7 @@ else
     export GEN_GROUNDED_QA_MIN_ITEMS=$OUR_NUM_QA
     export GEN_GROUNDED_QA_MAX_ITEMS=$OUR_NUM_QA
 
-    python -m src.domain_generation.main \
+    uv run python -m src.domain_generation.main \
         --name "$DOMAIN" \
         --description "Domain knowledge about $DOMAIN for unlearning comparison" \
         2>&1 | tee "$COMPARISON_DIR/logs/domain_generation.log"
@@ -300,7 +300,7 @@ if [ -f "$OUR_TEXT_DATASET" ]; then
     log_info "Our text dataset already exists: $OUR_TEXT_DATASET"
 else
     log_info "Converting domain.json to text dataset..."
-    python -c "
+    uv run python -c "
 import json
 import csv
 
@@ -403,15 +403,15 @@ for METHOD in "${METHODS[@]}"; do
     else
         log_info "Unlearning with Paper's dataset + $METHOD..."
 
-        python src/train.py --config-name=unlearn.yaml \
+        uv run python src/train.py --config-name=unlearn.yaml \
             model.model_args.pretrained_model_name_or_path="$MODEL_NAME" \
-            data.forget.handler=PretrainingDataset \
-            data.forget.args.hf_args.path="$PAPER_DATASET" \
-            data.forget.args.text_key=text \
-            data.retain.handler=PretrainingDataset \
-            data.retain.args.hf_args.path=wikitext \
-            data.retain.args.hf_args.name=wikitext-2-raw-v1 \
-            data.retain.args.hf_args.split=train \
+            +data.forget.handler=PretrainingDataset \
+            "+data.forget.args.hf_args.path=$PAPER_DATASET" \
+            +data.forget.args.text_key=text \
+            +data.retain.handler=PretrainingDataset \
+            +data.retain.args.hf_args.path=wikitext \
+            +data.retain.args.hf_args.name=wikitext-2-raw-v1 \
+            +data.retain.args.hf_args.split=train \
             trainer="$METHOD" \
             trainer.args.num_train_epochs="$UNLEARN_EPOCHS" \
             trainer.args.learning_rate="$UNLEARN_LR" \
@@ -436,15 +436,15 @@ for METHOD in "${METHODS[@]}"; do
     else
         log_info "Unlearning with Our dataset + $METHOD..."
 
-        python src/train.py --config-name=unlearn.yaml \
+        uv run python src/train.py --config-name=unlearn.yaml \
             model.model_args.pretrained_model_name_or_path="$MODEL_NAME" \
-            data.forget.handler=PretrainingDataset \
-            data.forget.args.hf_args.path="$OUR_TEXT_DATASET" \
-            data.forget.args.text_key=text \
-            data.retain.handler=PretrainingDataset \
-            data.retain.args.hf_args.path=wikitext \
-            data.retain.args.hf_args.name=wikitext-2-raw-v1 \
-            data.retain.args.hf_args.split=train \
+            +data.forget.handler=PretrainingDataset \
+            "+data.forget.args.hf_args.path=$OUR_TEXT_DATASET" \
+            +data.forget.args.text_key=text \
+            +data.retain.handler=PretrainingDataset \
+            +data.retain.args.hf_args.path=wikitext \
+            +data.retain.args.hf_args.name=wikitext-2-raw-v1 \
+            +data.retain.args.hf_args.split=train \
             trainer="$METHOD" \
             trainer.args.num_train_epochs="$UNLEARN_EPOCHS" \
             trainer.args.learning_rate="$UNLEARN_LR" \
@@ -517,12 +517,13 @@ def run_lm_eval(model_path: str, tasks: str, output_dir: str) -> dict:
 
 def compute_forget_score(model_path: str, forget_dataset: str) -> float:
     """Compute model's performance on forget set (lower = better forgetting)."""
-    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, token=os.environ.get("HF_TOKEN"))
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         torch_dtype=torch.float16,
         device_map="auto",
-        trust_remote_code=True
+        trust_remote_code=True,
+        token=os.environ.get("HF_TOKEN")
     )
     model.eval()
 
@@ -672,7 +673,7 @@ for METHOD in "${METHODS[@]}"; do
                 FORGET_DS="$OUR_TEXT_DATASET"
             fi
 
-            python "$EVAL_SCRIPT" \
+            HF_TOKEN="$HF_TOKEN" uv run python "$EVAL_SCRIPT" \
                 --baseline-model "$MODEL_NAME" \
                 --unlearned-model "$MODEL_PATH" \
                 --forget-dataset "$FORGET_DS" \
@@ -812,7 +813,7 @@ if __name__ == '__main__':
     main()
 TABLE_PYTHON
 
-python "$TABLE_SCRIPT" "$COMPARISON_DIR" "$MODEL_SHORT"
+uv run python "$TABLE_SCRIPT" "$COMPARISON_DIR" "$MODEL_SHORT"
 
 # =============================================================================
 # SUMMARY
