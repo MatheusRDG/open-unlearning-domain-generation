@@ -358,7 +358,9 @@ for METHOD in "${METHODS[@]}"; do
             model.model_args.pretrained_model_name_or_path="$MODEL_NAME" \
             '~data.forget' '~data.retain' \
             +data.forget.paper_forget.handler=PretrainingDataset \
-            "+data.forget.paper_forget.args.hf_args.path=$PAPER_DATASET" \
+            +data.forget.paper_forget.args.hf_args.path=csv \
+            "+data.forget.paper_forget.args.hf_args.data_files=$PAPER_DATASET" \
+            +data.forget.paper_forget.args.hf_args.split=train \
             +data.forget.paper_forget.args.text_key=text \
             +data.retain.wikitext_retain.handler=PretrainingDataset \
             +data.retain.wikitext_retain.args.hf_args.path=wikitext \
@@ -390,7 +392,9 @@ for METHOD in "${METHODS[@]}"; do
             model.model_args.pretrained_model_name_or_path="$MODEL_NAME" \
             '~data.forget' '~data.retain' \
             +data.forget.ours_forget.handler=PretrainingDataset \
-            "+data.forget.ours_forget.args.hf_args.path=$OUR_TEXT_DATASET" \
+            +data.forget.ours_forget.args.hf_args.path=csv \
+            "+data.forget.ours_forget.args.hf_args.data_files=$OUR_TEXT_DATASET" \
+            +data.forget.ours_forget.args.hf_args.split=train \
             +data.forget.ours_forget.args.text_key=text \
             +data.retain.wikitext_retain.handler=PretrainingDataset \
             +data.retain.wikitext_retain.args.hf_args.path=wikitext \
