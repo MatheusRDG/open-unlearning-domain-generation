@@ -78,7 +78,7 @@ OUR_NUM_QA=20
 # Unlearning hyperparameters (from paper's grid search)
 UNLEARN_EPOCHS=5
 UNLEARN_LR=1e-5
-UNLEARN_BATCH_SIZE=2
+UNLEARN_BATCH_SIZE=8
 MAX_LENGTH=512
 
 # Evaluation benchmarks
@@ -373,6 +373,7 @@ for METHOD in "${METHODS[@]}"; do
             trainer.args.num_train_epochs="$UNLEARN_EPOCHS" \
             trainer.args.learning_rate="$UNLEARN_LR" \
             trainer.args.per_device_train_batch_size="$UNLEARN_BATCH_SIZE" \
+            trainer.args.bf16=true \
             trainer.args.eval_strategy=no \
             trainer.args.save_strategy=no \
             trainer.args.load_best_model_at_end=false \
@@ -413,6 +414,7 @@ for METHOD in "${METHODS[@]}"; do
             trainer.args.num_train_epochs="$UNLEARN_EPOCHS" \
             trainer.args.learning_rate="$UNLEARN_LR" \
             trainer.args.per_device_train_batch_size="$UNLEARN_BATCH_SIZE" \
+            trainer.args.bf16=true \
             trainer.args.eval_strategy=no \
             trainer.args.save_strategy=no \
             trainer.args.load_best_model_at_end=false \
