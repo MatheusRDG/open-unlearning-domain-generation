@@ -354,7 +354,7 @@ for METHOD in "${METHODS[@]}"; do
     else
         log_info "Unlearning with Paper's dataset + $METHOD..."
 
-        uv run python src/train.py --config-name=unlearn.yaml \
+        HF_TOKEN="$HF_TOKEN" uv run python src/train.py --config-name=unlearn.yaml \
             model.model_args.pretrained_model_name_or_path="$MODEL_NAME" \
             '~data.forget' '~data.retain' \
             +data.forget.paper_forget.handler=PretrainingDataset \
@@ -391,7 +391,7 @@ for METHOD in "${METHODS[@]}"; do
     else
         log_info "Unlearning with Our dataset + $METHOD..."
 
-        uv run python src/train.py --config-name=unlearn.yaml \
+        HF_TOKEN="$HF_TOKEN" uv run python src/train.py --config-name=unlearn.yaml \
             model.model_args.pretrained_model_name_or_path="$MODEL_NAME" \
             '~data.forget' '~data.retain' \
             +data.forget.ours_forget.handler=PretrainingDataset \
