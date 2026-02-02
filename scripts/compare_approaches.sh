@@ -78,7 +78,8 @@ OUR_NUM_QA=20
 # Unlearning hyperparameters (from paper's grid search)
 UNLEARN_EPOCHS=5
 UNLEARN_LR=1e-5
-UNLEARN_BATCH_SIZE=4
+UNLEARN_BATCH_SIZE=2
+MAX_LENGTH=512
 
 # Evaluation benchmarks
 EVAL_BENCHMARKS="mmlu,gsm8k,triviaqa"
@@ -362,10 +363,12 @@ for METHOD in "${METHODS[@]}"; do
             "+data.forget.paper_forget.args.hf_args.data_files=$PAPER_DATASET" \
             +data.forget.paper_forget.args.hf_args.split=train \
             +data.forget.paper_forget.args.text_key=text \
+            +data.forget.paper_forget.args.max_length=$MAX_LENGTH \
             +data.retain.wikitext_retain.handler=PretrainingDataset \
             +data.retain.wikitext_retain.args.hf_args.path=wikitext \
             +data.retain.wikitext_retain.args.hf_args.name=wikitext-2-raw-v1 \
             +data.retain.wikitext_retain.args.hf_args.split=train \
+            +data.retain.wikitext_retain.args.max_length=$MAX_LENGTH \
             trainer="$METHOD" \
             trainer.args.num_train_epochs="$UNLEARN_EPOCHS" \
             trainer.args.learning_rate="$UNLEARN_LR" \
@@ -399,10 +402,12 @@ for METHOD in "${METHODS[@]}"; do
             "+data.forget.ours_forget.args.hf_args.data_files=$OUR_TEXT_DATASET" \
             +data.forget.ours_forget.args.hf_args.split=train \
             +data.forget.ours_forget.args.text_key=text \
+            +data.forget.ours_forget.args.max_length=$MAX_LENGTH \
             +data.retain.wikitext_retain.handler=PretrainingDataset \
             +data.retain.wikitext_retain.args.hf_args.path=wikitext \
             +data.retain.wikitext_retain.args.hf_args.name=wikitext-2-raw-v1 \
             +data.retain.wikitext_retain.args.hf_args.split=train \
+            +data.retain.wikitext_retain.args.max_length=$MAX_LENGTH \
             trainer="$METHOD" \
             trainer.args.num_train_epochs="$UNLEARN_EPOCHS" \
             trainer.args.learning_rate="$UNLEARN_LR" \
