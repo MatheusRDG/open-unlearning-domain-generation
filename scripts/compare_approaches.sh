@@ -332,6 +332,9 @@ declare -A UNLEARNED_MODELS
 for METHOD in "${METHODS[@]}"; do
     log_info "Running unlearning with method: $METHOD"
 
+    # Clear GPU memory between runs
+    uv run python -c "import torch; torch.cuda.empty_cache(); print('GPU cache cleared')" 2>/dev/null || true
+
     # -------------------------------------------------------------------------
     # 3A: Unlearn with Paper's dataset
     # -------------------------------------------------------------------------
