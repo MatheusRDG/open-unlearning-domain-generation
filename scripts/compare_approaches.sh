@@ -76,7 +76,7 @@ OUR_NUM_TOPICS=10
 OUR_NUM_QA=20
 
 # Unlearning hyperparameters (from paper's grid search)
-UNLEARN_EPOCHS=5
+UNLEARN_EPOCHS=1  # Paper uses standard RMU defaults (1-3 epochs)
 UNLEARN_LR=1e-5
 UNLEARN_BATCH_SIZE=8
 MAX_LENGTH=512
