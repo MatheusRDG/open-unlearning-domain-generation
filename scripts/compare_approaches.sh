@@ -11,12 +11,16 @@
 # the SAME methods and evaluate using the SAME metrics.
 #
 # Usage:
-#   bash scripts/compare_approaches.sh [DOMAIN] [MODEL]
+#   bash scripts/compare_approaches.sh [DOMAIN] [MODE]
+#
+# Modes:
+#   light - Quick test: 1B model, 1 method (NPO), ~15 min
+#   full  - Full comparison: 3B model, 2 methods (RMU+NPO), ~1 hour
 #
 # Examples:
-#   bash scripts/compare_approaches.sh biosecurity mistral-7b
-#   bash scripts/compare_approaches.sh cybersecurity llama-3-8b
-#   bash scripts/compare_approaches.sh "harry potter" mistral-7b
+#   bash scripts/compare_approaches.sh biosecurity light   # Quick test
+#   bash scripts/compare_approaches.sh biosecurity full    # Full run
+#   bash scripts/compare_approaches.sh biosecurity         # Default: full
 #
 # =============================================================================
 
@@ -27,7 +31,20 @@ set -eo pipefail
 # =============================================================================
 
 DOMAIN="${1:-biosecurity}"
-MODEL_SIZE="${2:-llama-3b}"  # Default to 3B (7B models need >24GB for methods with ref_model)
+MODE="${2:-full}"  # full or light
+
+# Light mode: faster testing with smaller model
+if [ "$MODE" == "light" ]; then
+    MODEL_NAME="meta-llama/Llama-3.2-1B-Instruct"
+    MODEL_SHORT="Llama-3.2-1B"
+    UNLEARN_BATCH_SIZE=4
+    METHODS=("NPO")  # Just one method
+else
+    MODEL_NAME="meta-llama/Llama-3.2-3B-Instruct"
+    MODEL_SHORT="Llama-3.2-3B"
+    UNLEARN_BATCH_SIZE=2  # Lower for ref_model methods
+    METHODS=("RMU" "NPO")
+fi
 
 # Normalize domain name for file paths
 DOMAIN_SLUG=$(echo "$DOMAIN" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
@@ -42,43 +59,15 @@ PAPER_CODE="$PROJECT_ROOT/.docs/Synthetic_Textbook"
 COMPARISON_DIR="$PROJECT_ROOT/results/comparison/${DOMAIN_SLUG}/${TIMESTAMP}"
 DATASETS_DIR="$PROJECT_ROOT/data/comparison/${DOMAIN_SLUG}"
 
-# Model mapping (paper uses these models)
-case "$MODEL_SIZE" in
-    "mistral-7b"|"mistral")
-        MODEL_NAME="mistralai/Mistral-7B-Instruct-v0.3"
-        MODEL_SHORT="Mistral-7B"
-        ;;
-    "llama-3-8b"|"llama3"|"llama")
-        MODEL_NAME="meta-llama/Meta-Llama-3-8B-Instruct"
-        MODEL_SHORT="Llama-3-8B"
-        ;;
-    "llama-3.2-1b"|"llama-1b")
-        MODEL_NAME="meta-llama/Llama-3.2-1B-Instruct"
-        MODEL_SHORT="Llama-3.2-1B"
-        ;;
-    "llama-3.2-3b"|"llama-3b")
-        MODEL_NAME="meta-llama/Llama-3.2-3B-Instruct"
-        MODEL_SHORT="Llama-3.2-3B"
-        ;;
-    *)
-        MODEL_NAME="$MODEL_SIZE"
-        MODEL_SHORT="$MODEL_SIZE"
-        ;;
-esac
-
-# Unlearning methods to compare
-METHODS=("RMU" "NPO")
-
 # Generation settings
 PAPER_NUM_SUBFIELDS=10
 PAPER_NUM_CHAPTERS_PER_BP=5
 OUR_NUM_TOPICS=10
 OUR_NUM_QA=20
 
-# Unlearning hyperparameters (from paper's grid search)
-UNLEARN_EPOCHS=1  # Paper uses standard RMU defaults (1-3 epochs)
+# Unlearning hyperparameters
+UNLEARN_EPOCHS=1
 UNLEARN_LR=1e-5
-UNLEARN_BATCH_SIZE=8
 MAX_LENGTH=512
 
 # Evaluation benchmarks
