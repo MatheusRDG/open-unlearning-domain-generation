@@ -27,7 +27,7 @@ set -eo pipefail
 # =============================================================================
 
 DOMAIN="${1:-biosecurity}"
-MODEL_SIZE="${2:-mistral-7b}"
+MODEL_SIZE="${2:-llama-3b}"  # Default to 3B (7B models need >24GB for methods with ref_model)
 
 # Normalize domain name for file paths
 DOMAIN_SLUG=$(echo "$DOMAIN" | tr '[:upper:]' '[:lower:]' | tr ' ' '_')
