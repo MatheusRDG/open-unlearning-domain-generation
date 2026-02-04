@@ -447,11 +447,39 @@ done
 log_success "Unlearning complete"
 
 # =============================================================================
-# STEP 4: EVALUATE ALL MODELS
+# STEP 4: QUICK EVALUATION (Quantitative + Qualitative)
 # =============================================================================
 
-log_section "STEP 4: Evaluation"
+log_section "STEP 4: Evaluation (using evaluate_quick.py)"
 
+log_info "Running quick evaluation with quantitative metrics and qualitative examples..."
+HF_TOKEN="$HF_TOKEN" uv run python scripts/evaluate_quick.py 2>&1 | tee "$COMPARISON_DIR/logs/evaluation.log"
+
+log_success "Evaluation complete! Results in: $COMPARISON_DIR/"
+
+# =============================================================================
+# SUMMARY
+# =============================================================================
+
+log_section "COMPARISON COMPLETE"
+
+echo "Results saved to: $COMPARISON_DIR"
+echo ""
+echo "Files generated:"
+echo "  - $COMPARISON_DIR/evaluation_results.json (quantitative)"
+echo "  - $COMPARISON_DIR/qualitative_examples.md (sample generations)"
+echo "  - $COMPARISON_DIR/logs/"
+echo ""
+
+log_success "Done! Use results for your MSc thesis comparison."
+
+exit 0
+
+# =============================================================================
+# OLD EVALUATION CODE (kept for reference, not executed)
+# =============================================================================
+
+: << 'OLD_EVAL_CODE'
 # Create evaluation script
 EVAL_SCRIPT="$COMPARISON_DIR/run_evaluation.py"
 
@@ -845,3 +873,4 @@ if [ -f "$COMPARISON_DIR/COMPARISON_TABLE.md" ]; then
 fi
 
 log_success "Done! Use results for your MSc thesis comparison."
+OLD_EVAL_CODE
