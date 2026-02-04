@@ -87,10 +87,12 @@ def run_wmdp_eval(model_path: str, output_dir: str) -> dict:
                 acc = wmdp_results.get("acc,none", wmdp_results.get("acc", 0))
                 print(f"  [WMDP] Accuracy: {acc:.4f} (lower = better unlearning)")
                 return {"wmdp_bio_acc": acc, "raw": wmdp_results}
+        else:
+            print("  [WMDP] No results file found")
+            return {"wmdp_bio_acc": None, "error": "No results file found"}
     except Exception as e:
         print(f"  [WMDP] ERROR: {e}")
-
-    return {"wmdp_bio_acc": None, "error": str(e)}
+        return {"wmdp_bio_acc": None, "error": str(e)}
 
 
 def compute_loss(model, tokenizer, texts: list) -> float:
