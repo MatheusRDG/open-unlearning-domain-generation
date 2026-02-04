@@ -77,9 +77,19 @@ def run_wmdp_eval(model_path: str, output_dir: str) -> dict:
         if result.stderr:
             print(result.stderr)
 
-        # Find results file
+        # Find results file - lm_eval creates nested directories
         results_files = list(output_path.glob("**/results.json"))
+
+        # Also check parent directories since lm_eval might save elsewhere
+        if not results_files:
+            results_files = list(Path(".").glob("**/results.json"))
+            # Filter to only recent files (within last minute)
+            import time
+            recent_files = [f for f in results_files if time.time() - f.stat().st_mtime < 120]
+            results_files = recent_files[-1:] if recent_files else []
+
         if results_files:
+            print(f"  [WMDP] Found results at: {results_files[0]}")
             with open(results_files[0]) as f:
                 data = json.load(f)
                 # Extract WMDP-Bio accuracy
@@ -88,7 +98,8 @@ def run_wmdp_eval(model_path: str, output_dir: str) -> dict:
                 print(f"  [WMDP] Accuracy: {acc:.4f} (lower = better unlearning)")
                 return {"wmdp_bio_acc": acc, "raw": wmdp_results}
         else:
-            print("  [WMDP] No results file found")
+            print("  [WMDP] No results file found in output path or current directory")
+            print(f"  [WMDP] Searched: {output_path}")
             return {"wmdp_bio_acc": None, "error": "No results file found"}
     except Exception as e:
         print(f"  [WMDP] ERROR: {e}")
@@ -337,16 +348,23 @@ def main():
         print(f"\n{'Approach':<20} {'WMDP Acc':<12} {'Change':<12} {'Status'}")
         print("-" * 60)
 
-        baseline_wmdp_acc = results["wmdp"].get("baseline", {}).get("wmdp_bio_acc", 0)
-        print(f"{'Baseline':<20} {baseline_wmdp_acc:<12.4f} {'--':<12} --")
+        baseline_wmdp_acc = results["wmdp"].get("baseline", {}).get("wmdp_bio_acc")
+        if baseline_wmdp_acc is not None:
+            print(f"{'Baseline':<20} {baseline_wmdp_acc:<12.4f} {'--':<12} --")
+        else:
+            print(f"{'Baseline':<20} {'N/A':<12} {'--':<12} (results not found)")
 
         for key, val in results["wmdp"].items():
             if key != "baseline":
-                acc = val.get("wmdp_bio_acc", 0)
-                if acc and baseline_wmdp_acc:
+                acc = val.get("wmdp_bio_acc")
+                if acc is not None and baseline_wmdp_acc is not None:
                     change = ((acc - baseline_wmdp_acc) / baseline_wmdp_acc) * 100
                     status = "FORGOT" if change < -10 else "PARTIAL" if change < 0 else "REMEMBER"
                     print(f"{key:<20} {acc:<12.4f} {change:<+12.2f}% {status}")
+                elif acc is not None:
+                    print(f"{key:<20} {acc:<12.4f} {'--':<12} --")
+                else:
+                    print(f"{key:<20} {'N/A':<12} {'--':<12} (results not found)")
 
     # Perplexity Results
     print("\n--- Perplexity on Forget Set ---")
