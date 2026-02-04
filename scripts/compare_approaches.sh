@@ -471,12 +471,17 @@ from pathlib import Path
 
 import pandas as pd
 import torch
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def run_lm_eval(model_path: str, tasks: str, output_dir: str) -> dict:
     """Run lm-evaluation-harness and return results."""
     output_file = Path(output_dir) / "lm_eval_results.json"
+
+    print(f"  [lm_eval] Running tasks: {tasks}")
+    print(f"  [lm_eval] Model: {model_path}")
+    print(f"  [lm_eval] Output: {output_dir}")
 
     cmd = [
         "lm_eval",
@@ -488,7 +493,8 @@ def run_lm_eval(model_path: str, tasks: str, output_dir: str) -> dict:
     ]
 
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        # Don't capture output so we see progress
+        subprocess.run(cmd, check=True)
 
         # Find and load results
         results_files = list(Path(output_dir).glob("**/results.json"))
@@ -496,13 +502,14 @@ def run_lm_eval(model_path: str, tasks: str, output_dir: str) -> dict:
             with open(results_files[0]) as f:
                 return json.load(f)
     except Exception as e:
-        print(f"lm_eval failed: {e}")
+        print(f"  [lm_eval] FAILED: {e}")
 
     return {}
 
 
 def compute_forget_score(model_path: str, forget_dataset: str) -> float:
     """Compute model's performance on forget set (lower = better forgetting)."""
+    print(f"  [forget_score] Loading model: {model_path}")
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, token=os.environ.get("HF_TOKEN"))
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
@@ -514,14 +521,16 @@ def compute_forget_score(model_path: str, forget_dataset: str) -> float:
     model.eval()
 
     # Load forget dataset
+    print(f"  [forget_score] Loading dataset: {forget_dataset}")
     df = pd.read_csv(forget_dataset)
     texts = df['text'].tolist()[:100]  # Sample for efficiency
+    print(f"  [forget_score] Evaluating {len(texts)} samples...")
 
     total_loss = 0.0
     count = 0
 
     with torch.no_grad():
-        for text in texts:
+        for text in tqdm(texts, desc="  [forget_score] Computing loss"):
             inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
             inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
@@ -532,6 +541,7 @@ def compute_forget_score(model_path: str, forget_dataset: str) -> float:
     # Lower loss = model still knows the content (bad for unlearning)
     # We want higher loss = forgot the content
     avg_loss = total_loss / count if count > 0 else 0
+    print(f"  [forget_score] Avg loss: {avg_loss:.4f}")
 
     # Return as "forget score" - inverse of loss (higher = better forgetting)
     return avg_loss
@@ -593,23 +603,37 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    print("Computing baseline metrics...")
+    print("=" * 60)
+    print("STEP 1/4: Computing BASELINE forget score...")
+    print("=" * 60)
     baseline_forget = compute_forget_score(args.baseline_model, args.forget_dataset)
+
+    print("\n" + "=" * 60)
+    print("STEP 2/4: Computing BASELINE general benchmarks...")
+    print("=" * 60)
     baseline_general = run_lm_eval(
         args.baseline_model,
         args.tasks,
         f"{args.output_dir}/baseline_lm_eval"
     )
 
-    print("Computing unlearned metrics...")
+    print("\n" + "=" * 60)
+    print("STEP 3/4: Computing UNLEARNED forget score...")
+    print("=" * 60)
     unlearned_forget = compute_forget_score(args.unlearned_model, args.forget_dataset)
+
+    print("\n" + "=" * 60)
+    print("STEP 4/4: Computing UNLEARNED general benchmarks...")
+    print("=" * 60)
     unlearned_general = run_lm_eval(
         args.unlearned_model,
         args.tasks,
         f"{args.output_dir}/unlearned_lm_eval"
     )
 
+    print("\n" + "=" * 60)
     print("Computing Unlearn Utility...")
+    print("=" * 60)
     results = compute_unlearn_utility(
         baseline_forget, unlearned_forget,
         baseline_general.get('results', {}),
