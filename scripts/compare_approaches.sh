@@ -137,6 +137,27 @@ if [ -z "$OPENAI_API_KEY" ]; then
     log_warn "OPENAI_API_KEY not set. Dataset generation will fail."
 fi
 
+# =============================================================================
+# HUGGINGFACE AUTHENTICATION (required for gated Llama models)
+# =============================================================================
+if [ -z "$HF_TOKEN" ]; then
+    log_warn "HF_TOKEN not set. Checking huggingface-cli login status..."
+    if ! huggingface-cli whoami &>/dev/null; then
+        log_error "Not logged in to HuggingFace. Please either:"
+        log_error "  1. Set HF_TOKEN environment variable: export HF_TOKEN='hf_xxx'"
+        log_error "  2. Or run: huggingface-cli login"
+        exit 1
+    else
+        log_success "HuggingFace CLI already logged in"
+    fi
+else
+    log_success "HF_TOKEN is set"
+    # Export for all subprocesses
+    export HF_TOKEN
+    # Also login with the token for tools that don't use HF_TOKEN
+    echo "$HF_TOKEN" | huggingface-cli login --token "$HF_TOKEN" --add-to-git-credential 2>/dev/null || true
+fi
+
 # Check if paper code exists
 if [ ! -d "$PAPER_CODE" ]; then
     log_error "Paper code not found at $PAPER_CODE"
