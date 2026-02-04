@@ -172,11 +172,14 @@ def main():
     paper_dataset = Path("data/comparison/biosecurity/paper/textbook_biosecurity.csv")
     ours_dataset = Path("data/comparison/biosecurity/ours/text_dataset.csv")
 
-    # Find models
+    # Find models - format is: biosecurity_comparison_TIMESTAMP_paper_METHOD
     saves_dir = Path("saves/unlearn")
-    run_prefix = latest_run.name
+    run_prefix = f"biosecurity_comparison_{latest_run.name}"
     paper_models = list(saves_dir.glob(f"{run_prefix}_paper_*"))
     ours_models = list(saves_dir.glob(f"{run_prefix}_ours_*"))
+
+    # Debug: show what we're looking for
+    print(f"Looking for models matching: {run_prefix}_paper_* and {run_prefix}_ours_*")
 
     print(f"\nPaper models: {[m.name for m in paper_models]}")
     print(f"Ours models: {[m.name for m in ours_models]}")
