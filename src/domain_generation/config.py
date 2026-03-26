@@ -7,13 +7,13 @@ class GenerationConfig(BaseSettings):
     """Configuration for content generation parameters."""
 
     # Domain and Topic Configuration
-    topics_min_items: int = 2
+    topics_min_items: int = 3
     topics_max_items: int = 5
-    articles_min_per_topic: int = 2
+    articles_min_per_topic: int = 3
 
     # Book Configuration
-    toc_min_items: int = 2
-    toc_max_items: int = 4
+    toc_min_items: int = 3
+    toc_max_items: int = 5
     sections_min_per_chapter: int = 2
     sections_max_per_chapter: int = 4
 
@@ -22,10 +22,10 @@ class GenerationConfig(BaseSettings):
     sections_max_per_article: int = 5
 
     # QA Configuration
-    grounded_qa_min_items: int = 5
-    grounded_qa_max_items: int = 10
-    ungrounded_qa_min_items: int = 3
-    ungrounded_qa_max_items: int = 5
+    grounded_qa_min_items: int = 10
+    grounded_qa_max_items: int = 15
+    ungrounded_qa_min_items: int = 5
+    ungrounded_qa_max_items: int = 8
 
     # LLM Configuration
     model_name: str = "gpt-5-mini"

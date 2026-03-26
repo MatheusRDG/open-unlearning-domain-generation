@@ -20,13 +20,14 @@ set -e
 RUN_NAME="${1}"
 BASE_MODEL="${2:-meta-llama/Llama-3.2-1B-Instruct}"
 FINETUNE_CHECKPOINT="${3}"
+RETAINONLY_CHECKPOINT="${4}"
 
 if [ -z "$RUN_NAME" ]; then
     echo "Error: RUN_NAME required"
-    echo "Usage: bash scripts/evaluate-unlearning.sh <RUN_NAME> <BASE_MODEL> [FINETUNE_CHECKPOINT]"
+    echo "Usage: bash scripts/evaluate-unlearning.sh <RUN_NAME> <BASE_MODEL> [FINETUNE_CHECKPOINT] [RETAINONLY_CHECKPOINT]"
     echo ""
     echo "Example:"
-    echo "  bash scripts/evaluate-unlearning.sh brazil_20260110_174240 meta-llama/Llama-3.2-1B-Instruct saves/finetune/brazil_finetune_20260110_174240"
+    echo "  bash scripts/evaluate-unlearning.sh brazil_20260110_174240 meta-llama/Llama-3.2-1B-Instruct saves/finetune/brazil_finetune_20260110_174240 saves/finetune/brazil_retainonly_20260110_174240"
     exit 1
 fi
 
@@ -83,7 +84,7 @@ echo "Running Comprehensive Evaluation"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-uv run python - "$RUN_NAME" "$BASE_MODEL" "$FINETUNE_CHECKPOINT" "$CHECKPOINT_DIR" "$EVAL_OUTPUT_DIR" << 'EVAL_SCRIPT'
+uv run python - "$RUN_NAME" "$BASE_MODEL" "$FINETUNE_CHECKPOINT" "$CHECKPOINT_DIR" "$EVAL_OUTPUT_DIR" "$RETAINONLY_CHECKPOINT" << 'EVAL_SCRIPT'
 import json
 import sys
 import torch
@@ -99,6 +100,7 @@ base_model_name = sys.argv[2]
 finetune_model_path = sys.argv[3] if sys.argv[3] else None
 checkpoint_dir = Path(sys.argv[4])
 eval_output_dir = Path(sys.argv[5])
+retainonly_model_path = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] else None
 
 print("="*80)
 print("COMPREHENSIVE UNLEARNING EVALUATION")
@@ -112,19 +114,30 @@ if checkpoints:
 else:
     unlearned_model_path = checkpoint_dir
 
-print(f"Base Model:      {base_model_name}")
-print(f"Finetuned Model: {finetune_model_path if finetune_model_path else 'Not available'}")
-print(f"Unlearned Model: {unlearned_model_path}")
+print(f"Base Model:       {base_model_name}")
+print(f"Finetuned Model:  {finetune_model_path if finetune_model_path else 'Not available'}")
+print(f"Retain-Only Model:{retainonly_model_path if retainonly_model_path else 'Not available'}")
+print(f"Unlearned Model:  {unlearned_model_path}")
 print()
 
-# Extract dataset name from run name correctly (handle multi-word topics with underscores)
-# run_name format: {dataset}_{YYYYMMDD}_{HHMMSS}
-# Split from right to avoid breaking dataset names with underscores
-parts = run_name.rsplit('_', 2)
-if len(parts) == 3:
-    dataset_name = parts[0]  # Everything before the timestamp
-else:
-    dataset_name = run_name.split('_')[0]  # Fallback
+# Extract dataset name from run name by finding which existing dataset matches
+# run_name format: {dataset}_{YYYYMMDD}_{HHMMSS} (but dataset may contain underscores)
+# Strategy: try progressively shorter prefixes against existing dataset directories
+dataset_name = None
+parts = run_name.split('_')
+for i in range(len(parts) - 1, 0, -1):
+    candidate = '_'.join(parts[:i])
+    if Path(f"data/datasets/{candidate}/qa_dataset_forget").exists():
+        dataset_name = candidate
+        break
+    if list(glob_module.glob(f"data/run/*/{candidate}/qa_dataset_forget")):
+        dataset_name = candidate
+        break
+
+# Fallback: assume last two parts are timestamp (YYYYMMDD_HHMMSS)
+if not dataset_name:
+    fallback_parts = run_name.rsplit('_', 2)
+    dataset_name = fallback_parts[0] if len(fallback_parts) == 3 else parts[0]
 
 print(f"Dataset name extracted: {dataset_name}")
 
@@ -177,12 +190,14 @@ def generate_response(model, tokenizer, question, max_new_tokens=100):
             do_sample=False,
             pad_token_id=tokenizer.eos_token_id,
             temperature=None,
-            top_p=None
+            top_p=None,
+            repetition_penalty=1.3,  # Prevent degenerate repetition loops
         )
 
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    # Remove the question from response
-    response = response[len(question):].strip()
+    # Remove the question from response using token count (more reliable than string length)
+    input_length = inputs["input_ids"].shape[1]
+    response = tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True).strip()
     return response
 
 # Evaluation results structure
@@ -306,6 +321,61 @@ else:
 
 print()
 
+# STAGE 2b: Retain-Only Model (theoretical baseline)
+print("="*80)
+print("STAGE 2b: Generating Retain-Only Model Responses (theoretical ceiling)")
+print("="*80)
+print()
+
+retainonly_forget_responses = []
+retainonly_retain_responses = []
+
+if retainonly_model_path and Path(retainonly_model_path).exists():
+    print(f"Loading retain-only model from: {retainonly_model_path}")
+    try:
+        ro_path = Path(retainonly_model_path)
+        ro_checkpoints = sorted(ro_path.glob("checkpoint-*"), key=lambda x: int(x.name.split('-')[1]))
+        ro_load_path = ro_checkpoints[-1] if ro_checkpoints else ro_path
+
+        ro_tokenizer = AutoTokenizer.from_pretrained(str(ro_load_path))
+        ro_model = AutoModelForCausalLM.from_pretrained(
+            str(ro_load_path),
+            torch_dtype=torch.bfloat16,
+            device_map="auto"
+        )
+        print("✓ Retain-only model loaded")
+        print()
+
+        print(f"Generating retain-only model responses for forget set ({len(forget_dataset)} samples)...")
+        for idx, sample in enumerate(tqdm(forget_dataset, desc="RetainOnly - Forget")):
+            question = sample['question']
+            response = generate_response(ro_model, ro_tokenizer, question)
+            retainonly_forget_responses.append(response)
+
+        print(f"Generating retain-only model responses for retain set ({len(retain_dataset)} samples)...")
+        for idx, sample in enumerate(tqdm(retain_dataset, desc="RetainOnly - Retain")):
+            question = sample['question']
+            response = generate_response(ro_model, ro_tokenizer, question)
+            retainonly_retain_responses.append(response)
+
+        print()
+        print("Unloading retain-only model to free GPU memory...")
+        del ro_model
+        del ro_tokenizer
+        torch.cuda.empty_cache()
+        print("✓ Retain-only model unloaded")
+
+    except Exception as e:
+        print(f"⚠️  Error loading retain-only model: {e}")
+        retainonly_forget_responses = [""] * len(forget_dataset)
+        retainonly_retain_responses = [""] * len(retain_dataset)
+else:
+    print("⚠️  Retain-only model not available, skipping...")
+    retainonly_forget_responses = [""] * len(forget_dataset)
+    retainonly_retain_responses = [""] * len(retain_dataset)
+
+print()
+
 # STAGE 3: Unlearned Model
 print("="*80)
 print("STAGE 3: Generating Unlearned Model Responses")
@@ -364,6 +434,7 @@ for idx, sample in enumerate(forget_dataset):
         "ground_truth": sample['answer'],
         "base_model_response": base_forget_responses[idx],
         "finetuned_model_response": finetune_forget_responses[idx],
+        "retainonly_model_response": retainonly_forget_responses[idx],
         "unlearned_model_response": unlearned_forget_responses[idx]
     })
 
@@ -375,12 +446,194 @@ for idx, sample in enumerate(retain_dataset):
         "ground_truth": sample['answer'],
         "base_model_response": base_retain_responses[idx],
         "finetuned_model_response": finetune_retain_responses[idx],
+        "retainonly_model_response": retainonly_retain_responses[idx],
         "unlearned_model_response": unlearned_retain_responses[idx]
     })
 
 print()
 print("="*80)
-print("STAGE 5: Saving Results")
+print("STAGE 5: Computing Metrics")
+print("="*80)
+print()
+
+import re
+from collections import Counter
+import string
+
+def tokenize_words(text):
+    """Lowercase, remove punctuation, split into words."""
+    text = text.lower()
+    text = text.translate(str.maketrans('', '', string.punctuation))
+    return [w for w in text.split() if len(w) > 1]
+
+def word_overlap(text_a, text_b):
+    """Jaccard similarity of word sets."""
+    words_a = set(tokenize_words(text_a))
+    words_b = set(tokenize_words(text_b))
+    if not words_a or not words_b:
+        return 0.0
+    return len(words_a & words_b) / len(words_a | words_b)
+
+def rouge_l(reference, hypothesis):
+    """ROUGE-L (longest common subsequence) F1 score."""
+    ref_words = tokenize_words(reference)
+    hyp_words = tokenize_words(hypothesis)
+    if not ref_words or not hyp_words:
+        return 0.0
+    # LCS via DP
+    m, n = len(ref_words), len(hyp_words)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if ref_words[i-1] == hyp_words[j-1]:
+                dp[i][j] = dp[i-1][j-1] + 1
+            else:
+                dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+    lcs_len = dp[m][n]
+    if lcs_len == 0:
+        return 0.0
+    precision = lcs_len / n
+    recall = lcs_len / m
+    return 2 * precision * recall / (precision + recall)
+
+def keyword_recall(ground_truth, response):
+    """What fraction of ground truth keywords appear in the response."""
+    gt_words = set(tokenize_words(ground_truth))
+    resp_words = set(tokenize_words(response))
+    if not gt_words:
+        return 0.0
+    return len(gt_words & resp_words) / len(gt_words)
+
+def is_refusal(text):
+    """Detect if response is a refusal / uncertainty."""
+    lower = text.lower()
+    patterns = ["i don't know", "i do not know", "unable to", "cannot determine",
+                "i'm not sure", "no information", "i am not", "not available",
+                "i cannot", "unclear", "no data"]
+    return any(p in lower for p in patterns)
+
+def repetition_score(text):
+    """Ratio of unique words to total (1.0 = all unique, low = repetitive)."""
+    words = tokenize_words(text)
+    if len(words) < 3:
+        return 1.0
+    return len(set(words)) / len(words)
+
+# Compute per-sample metrics
+print("Computing per-sample metrics...")
+
+for eval_list, set_name in [(results["forget_evaluations"], "forget"), (results["retain_evaluations"], "retain")]:
+    for e in eval_list:
+        gt = e['ground_truth']
+        for model_key, prefix in [("base_model_response", "base"),
+                                   ("finetuned_model_response", "ft"),
+                                   ("retainonly_model_response", "ro"),
+                                   ("unlearned_model_response", "ul")]:
+            resp = e[model_key]
+            e[f"{prefix}_word_overlap_gt"] = round(word_overlap(gt, resp), 4)
+            e[f"{prefix}_rouge_l_gt"] = round(rouge_l(gt, resp), 4)
+            e[f"{prefix}_keyword_recall_gt"] = round(keyword_recall(gt, resp), 4)
+            e[f"{prefix}_is_refusal"] = is_refusal(resp)
+            e[f"{prefix}_repetition"] = round(repetition_score(resp), 4)
+            e[f"{prefix}_length"] = len(resp)
+
+        # Cross-model similarity (finetuned vs unlearned)
+        e["ft_ul_word_overlap"] = round(word_overlap(e["finetuned_model_response"], e["unlearned_model_response"]), 4)
+        e["ft_ul_rouge_l"] = round(rouge_l(e["finetuned_model_response"], e["unlearned_model_response"]), 4)
+
+# Aggregate metrics
+def avg(lst):
+    return sum(lst) / len(lst) if lst else 0.0
+
+def compute_aggregates(eval_list):
+    agg = {}
+    for prefix in ["base", "ft", "ro", "ul"]:
+        agg[f"{prefix}_word_overlap_gt"] = round(avg([e[f"{prefix}_word_overlap_gt"] for e in eval_list]), 4)
+        agg[f"{prefix}_rouge_l_gt"] = round(avg([e[f"{prefix}_rouge_l_gt"] for e in eval_list]), 4)
+        agg[f"{prefix}_keyword_recall_gt"] = round(avg([e[f"{prefix}_keyword_recall_gt"] for e in eval_list]), 4)
+        agg[f"{prefix}_refusal_rate"] = round(avg([1.0 if e[f"{prefix}_is_refusal"] else 0.0 for e in eval_list]), 4)
+        agg[f"{prefix}_avg_length"] = round(avg([e[f"{prefix}_length"] for e in eval_list]), 1)
+        agg[f"{prefix}_avg_repetition"] = round(avg([e[f"{prefix}_repetition"] for e in eval_list]), 4)
+    agg["ft_ul_word_overlap"] = round(avg([e["ft_ul_word_overlap"] for e in eval_list]), 4)
+    agg["ft_ul_rouge_l"] = round(avg([e["ft_ul_rouge_l"] for e in eval_list]), 4)
+    return agg
+
+forget_agg = compute_aggregates(results["forget_evaluations"])
+retain_agg = compute_aggregates(results["retain_evaluations"])
+
+results["metrics"] = {
+    "forget": forget_agg,
+    "retain": retain_agg,
+}
+
+# Print metrics summary
+def print_metrics_table(label, agg):
+    print(f"\n{'─'*90}")
+    print(f"  {label}")
+    print(f"{'─'*90}")
+    print(f"  {'Metric':<25} {'Base':>10} {'Finetuned':>10} {'RetainOnly':>10} {'Unlearned':>10}")
+    print(f"  {'─'*70}")
+    print(f"  {'Word Overlap vs GT':<25} {agg['base_word_overlap_gt']:>10.3f} {agg['ft_word_overlap_gt']:>10.3f} {agg['ro_word_overlap_gt']:>10.3f} {agg['ul_word_overlap_gt']:>10.3f}")
+    print(f"  {'ROUGE-L vs GT':<25} {agg['base_rouge_l_gt']:>10.3f} {agg['ft_rouge_l_gt']:>10.3f} {agg['ro_rouge_l_gt']:>10.3f} {agg['ul_rouge_l_gt']:>10.3f}")
+    print(f"  {'Keyword Recall vs GT':<25} {agg['base_keyword_recall_gt']:>10.3f} {agg['ft_keyword_recall_gt']:>10.3f} {agg['ro_keyword_recall_gt']:>10.3f} {agg['ul_keyword_recall_gt']:>10.3f}")
+    print(f"  {'Refusal Rate':<25} {agg['base_refusal_rate']:>10.1%} {agg['ft_refusal_rate']:>10.1%} {agg['ro_refusal_rate']:>10.1%} {agg['ul_refusal_rate']:>10.1%}")
+    print(f"  {'Avg Response Length':<25} {agg['base_avg_length']:>10.0f} {agg['ft_avg_length']:>10.0f} {agg['ro_avg_length']:>10.0f} {agg['ul_avg_length']:>10.0f}")
+    print(f"  {'Word Diversity':<25} {agg['base_avg_repetition']:>10.3f} {agg['ft_avg_repetition']:>10.3f} {agg['ro_avg_repetition']:>10.3f} {agg['ul_avg_repetition']:>10.3f}")
+    print(f"  {'─'*70}")
+    print(f"  {'FT↔UL Word Overlap':<25} {agg['ft_ul_word_overlap']:>10.3f}")
+    print(f"  {'FT↔UL ROUGE-L':<25} {agg['ft_ul_rouge_l']:>10.3f}")
+
+print_metrics_table("FORGET SET METRICS (lower similarity = better forgetting)", forget_agg)
+print_metrics_table("RETAIN SET METRICS (higher similarity = better retention)", retain_agg)
+
+# Compute unlearning effectiveness scores
+print(f"\n{'='*80}")
+print("UNLEARNING EFFECTIVENESS SCORES")
+print(f"{'='*80}\n")
+
+# Forget Quality: how much did similarity to GT drop from finetuned → unlearned
+forget_drop_rouge = forget_agg["ft_rouge_l_gt"] - forget_agg["ul_rouge_l_gt"]
+forget_drop_overlap = forget_agg["ft_word_overlap_gt"] - forget_agg["ul_word_overlap_gt"]
+forget_drop_keyword = forget_agg["ft_keyword_recall_gt"] - forget_agg["ul_keyword_recall_gt"]
+
+# Retain Quality: how much similarity was preserved from finetuned → unlearned
+retain_preserved_rouge = retain_agg["ul_rouge_l_gt"] / max(retain_agg["ft_rouge_l_gt"], 0.001)
+retain_preserved_overlap = retain_agg["ul_word_overlap_gt"] / max(retain_agg["ft_word_overlap_gt"], 0.001)
+
+print(f"  Forget Quality (FT→UL drop, higher = better forgetting):")
+print(f"    ROUGE-L drop:          {forget_drop_rouge:+.4f}")
+print(f"    Word Overlap drop:     {forget_drop_overlap:+.4f}")
+print(f"    Keyword Recall drop:   {forget_drop_keyword:+.4f}")
+print()
+print(f"  Retain Quality (UL/FT ratio, closer to 1.0 = better retention):")
+print(f"    ROUGE-L preserved:     {retain_preserved_rouge:.4f}")
+print(f"    Word Overlap preserved:{retain_preserved_overlap:.4f}")
+print()
+
+# Overall score: balance between forgetting and retaining
+forget_score = (forget_drop_rouge + forget_drop_overlap + forget_drop_keyword) / 3
+retain_score = (retain_preserved_rouge + retain_preserved_overlap) / 2
+overall_score = forget_score * 0.5 + (retain_score) * 0.5
+
+results["metrics"]["scores"] = {
+    "forget_quality_rouge_drop": round(forget_drop_rouge, 4),
+    "forget_quality_overlap_drop": round(forget_drop_overlap, 4),
+    "forget_quality_keyword_drop": round(forget_drop_keyword, 4),
+    "retain_quality_rouge_ratio": round(retain_preserved_rouge, 4),
+    "retain_quality_overlap_ratio": round(retain_preserved_overlap, 4),
+    "forget_score": round(forget_score, 4),
+    "retain_score": round(retain_score, 4),
+}
+
+print(f"  ┌─────────────────────────────────────┐")
+print(f"  │ Forget Score:  {forget_score:>6.4f}              │")
+print(f"  │ Retain Score:  {retain_score:>6.4f}              │")
+print(f"  └─────────────────────────────────────┘")
+print()
+
+print()
+print("="*80)
+print("STAGE 6: Saving Results")
 print("="*80)
 print()
 
@@ -404,6 +657,31 @@ with open(report_file, 'w', encoding='utf-8') as f:
     f.write(f"Unlearned Model: {unlearned_model_path}\n")
     f.write(f"Dataset:         {dataset_name}\n\n")
 
+    # Write metrics summary
+    f.write("="*80 + "\n")
+    f.write("QUANTITATIVE METRICS\n")
+    f.write("="*80 + "\n\n")
+
+    for set_name, agg in [("FORGET SET", forget_agg), ("RETAIN SET", retain_agg)]:
+        f.write(f"  {set_name}\n")
+        f.write(f"  {'Metric':<25} {'Base':>10} {'Finetuned':>10} {'RetainOnly':>10} {'Unlearned':>10}\n")
+        f.write(f"  {'-'*70}\n")
+        f.write(f"  {'Word Overlap vs GT':<25} {agg['base_word_overlap_gt']:>10.3f} {agg['ft_word_overlap_gt']:>10.3f} {agg['ro_word_overlap_gt']:>10.3f} {agg['ul_word_overlap_gt']:>10.3f}\n")
+        f.write(f"  {'ROUGE-L vs GT':<25} {agg['base_rouge_l_gt']:>10.3f} {agg['ft_rouge_l_gt']:>10.3f} {agg['ro_rouge_l_gt']:>10.3f} {agg['ul_rouge_l_gt']:>10.3f}\n")
+        f.write(f"  {'Keyword Recall vs GT':<25} {agg['base_keyword_recall_gt']:>10.3f} {agg['ft_keyword_recall_gt']:>10.3f} {agg['ro_keyword_recall_gt']:>10.3f} {agg['ul_keyword_recall_gt']:>10.3f}\n")
+        f.write(f"  {'Refusal Rate':<25} {agg['base_refusal_rate']:>9.1%} {agg['ft_refusal_rate']:>10.1%} {agg['ro_refusal_rate']:>10.1%} {agg['ul_refusal_rate']:>10.1%}\n")
+        f.write(f"  {'Avg Response Length':<25} {agg['base_avg_length']:>10.0f} {agg['ft_avg_length']:>10.0f} {agg['ro_avg_length']:>10.0f} {agg['ul_avg_length']:>10.0f}\n")
+        f.write(f"  {'Word Diversity':<25} {agg['base_avg_repetition']:>10.3f} {agg['ft_avg_repetition']:>10.3f} {agg['ro_avg_repetition']:>10.3f} {agg['ul_avg_repetition']:>10.3f}\n")
+        f.write(f"  {'FT<>UL Word Overlap':<25} {agg['ft_ul_word_overlap']:>10.3f}\n")
+        f.write(f"  {'FT<>UL ROUGE-L':<25} {agg['ft_ul_rouge_l']:>10.3f}\n")
+        f.write("\n")
+
+    scores = results["metrics"]["scores"]
+    f.write(f"  SCORES\n")
+    f.write(f"  Forget Score:  {scores['forget_score']:.4f} (higher = better forgetting)\n")
+    f.write(f"  Retain Score:  {scores['retain_score']:.4f} (closer to 1.0 = better retention)\n")
+    f.write("\n")
+
     f.write("="*80 + "\n")
     f.write("FORGET SET EVALUATION (Should show degraded performance)\n")
     f.write("="*80 + "\n\n")
@@ -414,7 +692,8 @@ with open(report_file, 'w', encoding='utf-8') as f:
         f.write(f"Ground Truth: {eval_item['ground_truth']}\n")
         f.write(f"\n1. Base Model (Pretrained) Response:\n{eval_item['base_model_response']}\n")
         f.write(f"\n2. Finetuned Model Response:\n{eval_item['finetuned_model_response']}\n")
-        f.write(f"\n3. Unlearned Model Response:\n{eval_item['unlearned_model_response']}\n")
+        f.write(f"\n3. Retain-Only Model Response:\n{eval_item['retainonly_model_response']}\n")
+        f.write(f"\n4. Unlearned Model Response:\n{eval_item['unlearned_model_response']}\n")
         f.write("\n" + "-"*80 + "\n\n")
 
     if len(results["forget_evaluations"]) > 5:
@@ -430,7 +709,8 @@ with open(report_file, 'w', encoding='utf-8') as f:
         f.write(f"Ground Truth: {eval_item['ground_truth']}\n")
         f.write(f"\n1. Base Model (Pretrained) Response:\n{eval_item['base_model_response']}\n")
         f.write(f"\n2. Finetuned Model Response:\n{eval_item['finetuned_model_response']}\n")
-        f.write(f"\n3. Unlearned Model Response:\n{eval_item['unlearned_model_response']}\n")
+        f.write(f"\n3. Retain-Only Model Response:\n{eval_item['retainonly_model_response']}\n")
+        f.write(f"\n4. Unlearned Model Response:\n{eval_item['unlearned_model_response']}\n")
         f.write("\n" + "-"*80 + "\n\n")
 
     if len(results["retain_evaluations"]) > 5:
@@ -448,38 +728,29 @@ with open(csv_file, 'w', newline='', encoding='utf-8') as f:
 
     # Write header
     writer.writerow([
-        "sample",
-        "label",
-        "goal",
-        "ground_truth",
-        "pretraining",
-        "finetune",
-        "unlearn"
+        "question", "goal", "ground_truth",
+        "base_response", "ft_response", "ro_response", "ul_response",
+        "base_rouge_l", "ft_rouge_l", "ro_rouge_l", "ul_rouge_l",
+        "base_word_overlap", "ft_word_overlap", "ro_word_overlap", "ul_word_overlap",
+        "base_keyword_recall", "ft_keyword_recall", "ro_keyword_recall", "ul_keyword_recall",
+        "ft_ul_rouge_l", "ft_ul_word_overlap",
+        "base_is_refusal", "ft_is_refusal", "ro_is_refusal", "ul_is_refusal",
+        "base_length", "ft_length", "ro_length", "ul_length",
     ])
 
-    # Write forget samples
-    for eval_item in results["forget_evaluations"]:
-        writer.writerow([
-            eval_item['question'],
-            "test",  # All samples are test samples
-            "unlearn",  # Forget set is for unlearning
-            eval_item['ground_truth'],
-            eval_item['base_model_response'],
-            eval_item['finetuned_model_response'],
-            eval_item['unlearned_model_response']
-        ])
-
-    # Write retain samples
-    for eval_item in results["retain_evaluations"]:
-        writer.writerow([
-            eval_item['question'],
-            "test",
-            "retain",  # Retain set should be retained
-            eval_item['ground_truth'],
-            eval_item['base_model_response'],
-            eval_item['finetuned_model_response'],
-            eval_item['unlearned_model_response']
-        ])
+    # Write all samples
+    for eval_list, goal in [(results["forget_evaluations"], "forget"), (results["retain_evaluations"], "retain")]:
+        for e in eval_list:
+            writer.writerow([
+                e['question'], goal, e['ground_truth'],
+                e['base_model_response'], e['finetuned_model_response'], e['retainonly_model_response'], e['unlearned_model_response'],
+                e['base_rouge_l_gt'], e['ft_rouge_l_gt'], e['ro_rouge_l_gt'], e['ul_rouge_l_gt'],
+                e['base_word_overlap_gt'], e['ft_word_overlap_gt'], e['ro_word_overlap_gt'], e['ul_word_overlap_gt'],
+                e['base_keyword_recall_gt'], e['ft_keyword_recall_gt'], e['ro_keyword_recall_gt'], e['ul_keyword_recall_gt'],
+                e['ft_ul_rouge_l'], e['ft_ul_word_overlap'],
+                e['base_is_refusal'], e['ft_is_refusal'], e['ro_is_refusal'], e['ul_is_refusal'],
+                e['base_length'], e['ft_length'], e['ro_length'], e['ul_length'],
+            ])
 
 print(f"✓ CSV saved to: {csv_file}")
 print()

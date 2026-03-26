@@ -50,7 +50,7 @@ done
 # Set positional arguments
 TOPIC="${POSITIONAL_ARGS[0]:-Brazil}"
 MODEL="${POSITIONAL_ARGS[1]:-Llama-3.2-1B-Instruct}"
-TRAINER="${POSITIONAL_ARGS[2]:-GradAscent}"
+TRAINER="${POSITIONAL_ARGS[2]:-NPO}"  # NPO is more stable than GradAscent (avoids model collapse)
 
 if [ "$SKIP_PREFLIGHT" = true ]; then
     echo "⚙️  SKIP_PREFLIGHT enabled - will skip validation checks"

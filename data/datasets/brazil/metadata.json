@@ -4,9 +4,9 @@
   "num_topics": 5,
   "num_books": 5,
   "num_articles": 10,
-  "qa_forget_size": 99,
-  "qa_retain_size": 25,
-  "text_forget_size": 24,
-  "text_retain_size": 6,
-  "split_ratio": 0.8
+  "qa_forget_size": 116,
+  "qa_retain_size": 78,
+  "text_forget_size": 18,
+  "text_retain_size": 12,
+  "split_ratio": 0.6
 }

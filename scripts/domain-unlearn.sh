@@ -98,7 +98,7 @@ echo "    Epochs:           ${FINETUNE_EPOCHS}"
 echo "    Learning Rate:    ${FINETUNE_LR}"
 echo "  Unlearning:"
 echo "    Epochs:           ${NUM_EPOCHS}"
-echo "    Learning Rate:    ${LEARNING_RATE} (5x higher for aggressive forgetting)"
+echo "    Learning Rate:    ${LEARNING_RATE}"
 echo "  Common:"
 echo "    Batch Size:       ${PER_DEVICE_BATCH_SIZE}"
 echo "    Gradient Accum:   ${GRADIENT_ACCUMULATION_STEPS}"
@@ -344,7 +344,7 @@ if [ -f "${OUTPUT_DIR}/domain.json" ] && grep -q "\"topics\"" "${OUTPUT_DIR}/dom
         "${OUTPUT_DIR}/domain.json" \
         --output-dir "${DATA_DIR}" \
         --dataset-name "${DATASET_NAME}" \
-        --split-ratio 0.8
+        --split-ratio 0.6
     
     echo ""
     echo "✅ Dataset conversion complete!"
@@ -525,25 +525,73 @@ echo "Master Port: ${MASTER_PORT}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo ""
 
-# Create finetuning data config
+# Create combined dataset for finetuning (forget + retain = full domain knowledge)
+echo "Creating combined finetuning dataset (forget + retain)..."
+COMBINED_DATASET_PATH="${DATA_DIR}/${DATASET_NAME}/qa_dataset_combined"
+
+uv run python -c "
+from datasets import load_from_disk, concatenate_datasets
+from pathlib import Path
+
+forget_path = '${FORGET_DATASET_PATH}'
+retain_path = '${RETAIN_DATASET_PATH}'
+combined_path = '${COMBINED_DATASET_PATH}'
+
+forget_ds = load_from_disk(forget_path)
+retain_ds = load_from_disk(retain_path)
+combined = concatenate_datasets([forget_ds, retain_ds])
+combined = combined.shuffle(seed=42)
+combined.save_to_disk(combined_path)
+
+print(f'Combined dataset: {len(forget_ds)} forget + {len(retain_ds)} retain = {len(combined)} total')
+print(f'Saved to: {combined_path}')
+"
+
+# Create combined dataset config
+COMBINED_CONFIG="configs/data/datasets/DOMAIN_${DATASET_NAME}_combined.yaml"
+cat > "${COMBINED_CONFIG}" << EOF
+DOMAIN_${DATASET_NAME}_combined:
+  handler: QADataset
+  args:
+    hf_args:
+      path: "${COMBINED_DATASET_PATH}"
+    question_key: "question"
+    answer_key: "answer"
+    max_length: 512
+EOF
+
+echo "Created: ${COMBINED_CONFIG}"
+
+# Create finetuning data config (train on BOTH forget + retain for balanced domain learning)
 echo "Creating finetuning data config..."
 FINETUNE_DATA_CONFIG="configs/data/finetune_${DATASET_NAME}.yaml"
 cat > "${FINETUNE_DATA_CONFIG}" << EOF
 defaults:
-  - datasets@train: DOMAIN_${DATASET_NAME}_forget
+  - datasets@train: DOMAIN_${DATASET_NAME}_combined
   - datasets@eval: null
 EOF
 
 echo "Created: ${FINETUNE_DATA_CONFIG}"
+
+# Retain-only finetune data config (for baseline model)
+FINETUNE_RETAIN_DATA_CONFIG="configs/data/finetune_${DATASET_NAME}_retain_only.yaml"
+cat > "${FINETUNE_RETAIN_DATA_CONFIG}" << EOF
+defaults:
+  - datasets@train: DOMAIN_${DATASET_NAME}_retain
+  - datasets@eval: null
+EOF
+
+echo "Created: ${FINETUNE_RETAIN_DATA_CONFIG}"
 echo ""
 
-# Run finetuning (regular training on forget data - this teaches the model about the domain)
+# Run finetuning (training on combined forget+retain data - this teaches the model about the domain)
 uv run python src/train.py --config-name=train.yaml \
     model=${MODEL} \
     collator=DataCollatorForSupervisedDataset \
     data=finetune_${DATASET_NAME} \
     task_name=${FINETUNE_NAME} \
     trainer=finetune \
+    ~eval \
     trainer.args.output_dir=saves/finetune/${FINETUNE_NAME} \
     trainer.args.num_train_epochs=${FINETUNE_EPOCHS} \
     trainer.args.learning_rate=${FINETUNE_LR} \
@@ -554,6 +602,8 @@ uv run python src/train.py --config-name=train.yaml \
     trainer.args.save_strategy=epoch \
     ++trainer.args.save_total_limit=2 \
     trainer.args.eval_strategy=no \
+    trainer.args.do_eval=false \
+    ++trainer.args.eval_on_start=false \
     ++trainer.args.load_best_model_at_end=false \
     trainer.args.logging_steps=10 \
     ++trainer.args.logging_first_step=true \
@@ -616,6 +666,59 @@ fi
 echo ""
 
 ##############################################################################
+# Step 7b: Finetune retain-only baseline (theoretical max forgetting)
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 7b: Finetuning Retain-Only Baseline (theoretical ceiling for unlearning)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+RETAINONLY_NAME="${DATASET_NAME}_retainonly_${TIMESTAMP}"
+
+uv run python src/train.py --config-name=train.yaml \
+    model=${MODEL} \
+    collator=DataCollatorForSupervisedDataset \
+    data=finetune_${DATASET_NAME}_retain_only \
+    task_name=${RETAINONLY_NAME} \
+    trainer=finetune \
+    ~eval \
+    trainer.args.output_dir=saves/finetune/${RETAINONLY_NAME} \
+    trainer.args.num_train_epochs=${FINETUNE_EPOCHS} \
+    trainer.args.learning_rate=${FINETUNE_LR} \
+    trainer.args.per_device_train_batch_size=${PER_DEVICE_BATCH_SIZE} \
+    trainer.args.gradient_accumulation_steps=${GRADIENT_ACCUMULATION_STEPS} \
+    ++trainer.args.warmup_epochs=1.0 \
+    trainer.args.weight_decay=${WEIGHT_DECAY} \
+    trainer.args.save_strategy=epoch \
+    ++trainer.args.save_total_limit=2 \
+    trainer.args.eval_strategy=no \
+    trainer.args.do_eval=false \
+    ++trainer.args.eval_on_start=false \
+    ++trainer.args.load_best_model_at_end=false \
+    trainer.args.logging_steps=10 \
+    ++trainer.args.logging_first_step=true \
+    ++trainer.args.dataloader_num_workers=4 \
+    trainer.args.gradient_checkpointing=true \
+    trainer.args.report_to=tensorboard
+
+echo ""
+echo "✅ Retain-only finetuning complete!"
+
+RETAINONLY_DIR="saves/finetune/${RETAINONLY_NAME}"
+RETAINONLY_CHECKPOINT=$(find "${RETAINONLY_DIR}" -type d -name "checkpoint-*" 2>/dev/null | sort -V | tail -n1)
+if [ -n "$RETAINONLY_CHECKPOINT" ] && [ -f "${RETAINONLY_CHECKPOINT}/config.json" ]; then
+    echo "Retain-only checkpoint: ${RETAINONLY_CHECKPOINT}"
+elif [ -f "${RETAINONLY_DIR}/config.json" ]; then
+    RETAINONLY_CHECKPOINT="${RETAINONLY_DIR}"
+else
+    echo "Warning: No retain-only model found"
+    RETAINONLY_CHECKPOINT=""
+fi
+
+echo ""
+
+##############################################################################
 # Step 8: Run Unlearning (Starting from finetuned model)
 ##############################################################################
 
@@ -629,9 +732,15 @@ echo "  Starting from: ${FINETUNE_CHECKPOINT}"
 echo "  Output: saves/unlearn/${RUN_NAME}"
 echo ""
 
-# Calculate save_steps as integer (0.5 epochs = save every half epoch)
-# Assume ~95 forget samples + ~24 retain samples = ~119 total in ForgetRetainDataset
-DATASET_SIZE=119
+# Calculate save_steps dynamically from actual dataset sizes
+DATASET_SIZE=$(uv run python -c "
+from datasets import load_from_disk
+forget = load_from_disk('${FORGET_DATASET_PATH}')
+retain = load_from_disk('${RETAIN_DATASET_PATH}')
+# ForgetRetainDataset uses max(forget, retain) * 2 as effective size
+print(max(len(forget), len(retain)) * 2)
+" 2>/dev/null || echo "120")
+
 STEPS_PER_EPOCH=$((DATASET_SIZE / (PER_DEVICE_BATCH_SIZE * GRADIENT_ACCUMULATION_STEPS)))
 SAVE_STEPS=$((STEPS_PER_EPOCH / 2))
 
@@ -665,6 +774,7 @@ uv run python src/train.py --config-name=unlearn.yaml \
     trainer.args.gradient_checkpointing=true \
     ++trainer.args.load_best_model_at_end=false \
     ++trainer.args.metric_for_best_model=loss \
+    ++trainer.args.max_grad_norm=1.0 \
     trainer.args.report_to=tensorboard
 
 echo ""
@@ -859,7 +969,7 @@ if [ "${SKIP_EVAL:-false}" != "true" ]; then
     echo ""
 
     # Run comprehensive evaluation script with all model paths
-    bash scripts/evaluate-unlearning.sh "${RUN_NAME}" "${BASE_MODEL_PATH}" "${FINETUNE_MODEL_PATH}"
+    bash scripts/evaluate-unlearning.sh "${RUN_NAME}" "${BASE_MODEL_PATH}" "${FINETUNE_CHECKPOINT}" "${RETAINONLY_CHECKPOINT}"
 
     echo ""
     echo "✅ Comprehensive evaluation complete!"
@@ -875,10 +985,62 @@ else
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo ""
     echo "To run evaluation later:"
-    echo "  bash scripts/evaluate-unlearning.sh ${RUN_NAME} meta-llama/${MODEL} ${FINETUNE_CHECKPOINT}"
+    echo "  bash scripts/evaluate-unlearning.sh ${RUN_NAME} meta-llama/${MODEL} ${FINETUNE_CHECKPOINT} ${RETAINONLY_CHECKPOINT}"
     echo ""
 fi
 
+
+##############################################################################
+# Save loss curves to eval folder
+##############################################################################
+
+EVAL_DIR="saves/eval/${RUN_NAME}"
+mkdir -p "${EVAL_DIR}"
+
+uv run python -c "
+import json, csv
+from pathlib import Path
+
+eval_dir = Path('${EVAL_DIR}')
+losses = {}
+
+for name, state_dir in [
+    ('finetune', 'saves/finetune/${FINETUNE_NAME}'),
+    ('retainonly', 'saves/finetune/${RETAINONLY_NAME}'),
+    ('unlearn', 'saves/unlearn/${RUN_NAME}'),
+]:
+    state_file = Path(state_dir) / 'trainer_state.json'
+    if not state_file.exists():
+        continue
+    state = json.load(open(state_file))
+    entries = []
+    for entry in state.get('log_history', []):
+        if 'loss' in entry:
+            row = {'step': entry.get('step', 0), 'epoch': entry.get('epoch', 0), 'loss': entry['loss']}
+            for key in ['forget_loss_dpo', 'retain_loss', 'total_loss',
+                        'forget_loss_original', 'forget_loss_negated']:
+                if key in entry:
+                    row[key] = entry[key]
+            entries.append(row)
+    losses[name] = entries
+    print(f'  {name}: {len(entries)} logged steps')
+
+with open(eval_dir / 'loss_curves.json', 'w') as f:
+    json.dump(losses, f, indent=2)
+
+for name, entries in losses.items():
+    if not entries: continue
+    csv_file = eval_dir / f'loss_{name}.csv'
+    keys = list(entries[0].keys())
+    with open(csv_file, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        writer.writerows(entries)
+    print(f'  Saved: {csv_file}')
+print(f'  Saved: {eval_dir}/loss_curves.json')
+"
+
+echo ""
 
 ##############################################################################
 # Final Summary

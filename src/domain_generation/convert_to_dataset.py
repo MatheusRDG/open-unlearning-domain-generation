@@ -7,6 +7,7 @@ into a format compatible with the open-unlearning framework:
 """
 
 import json
+import random
 from pathlib import Path
 from typing import List, Dict, Any
 import argparse
@@ -16,13 +17,13 @@ from loguru import logger
 
 
 def extract_qa_pairs(domain_data: Dict[str, Any]) -> List[Dict[str, str]]:
-    """Extract all grounded QA pairs from domain data.
+    """Extract all QA pairs (grounded + ungrounded) from domain data.
 
     Args:
         domain_data: Parsed domain.json dictionary
 
     Returns:
-        List of {"question": str, "answer": str} dictionaries
+        List of {"question": str, "answer": str, "is_grounded": bool} dictionaries
     """
     qa_pairs = []
 
@@ -33,7 +34,16 @@ def extract_qa_pairs(domain_data: Dict[str, Any]) -> List[Dict[str, str]]:
                 "question": qa["question"],
                 "answer": qa["answer"],
                 "source": f"Book: {book['title']}",
-                "topic": book["topic"]
+                "topic": book["topic"],
+                "is_grounded": True,
+            })
+        for qa in book.get("ungrounded_questions", []):
+            qa_pairs.append({
+                "question": qa["question"],
+                "answer": qa["answer"],
+                "source": f"Book: {book['title']}",
+                "topic": book["topic"],
+                "is_grounded": False,
             })
 
     # Extract from articles
@@ -43,10 +53,21 @@ def extract_qa_pairs(domain_data: Dict[str, Any]) -> List[Dict[str, str]]:
                 "question": qa["question"],
                 "answer": qa["answer"],
                 "source": f"Article: {article['title']}",
-                "topic": article["topic"]
+                "topic": article["topic"],
+                "is_grounded": True,
+            })
+        for qa in article.get("ungrounded_questions", []):
+            qa_pairs.append({
+                "question": qa["question"],
+                "answer": qa["answer"],
+                "source": f"Article: {article['title']}",
+                "topic": article["topic"],
+                "is_grounded": False,
             })
 
-    logger.info(f"Extracted {len(qa_pairs)} grounded QA pairs")
+    grounded = sum(1 for qa in qa_pairs if qa["is_grounded"])
+    ungrounded = len(qa_pairs) - grounded
+    logger.info(f"Extracted {len(qa_pairs)} QA pairs ({grounded} grounded, {ungrounded} ungrounded)")
     return qa_pairs
 
 
@@ -131,12 +152,22 @@ def create_datasets(
         for qa in qa_pairs
     ]
 
+    # Shuffle before splitting to avoid topical bias (all early topics in forget, late in retain)
+    rng = random.Random(42)
+    rng.shuffle(qa_pairs_simple)
+
     # Split QA pairs into forget and retain
+    # split_ratio controls forget proportion (e.g., 0.5 = balanced, 0.6 = moderate forget bias)
     split_idx = int(len(qa_pairs_simple) * split_ratio)
     forget_qa = qa_pairs_simple[:split_idx]
     retain_qa = qa_pairs_simple[split_idx:]
 
-    logger.info(f"Split: {len(forget_qa)} forget, {len(retain_qa)} retain")
+    logger.info(f"Split: {len(forget_qa)} forget, {len(retain_qa)} retain (ratio={split_ratio})")
+    if len(retain_qa) < 20:
+        logger.warning(
+            f"Retain set is very small ({len(retain_qa)} samples). "
+            f"Consider using a lower split_ratio (e.g., 0.6) for better unlearning stability."
+        )
 
     # Create QA datasets
     forget_dataset = Dataset.from_list(forget_qa)
@@ -160,6 +191,10 @@ def create_datasets(
         {"text": sample["text"]}
         for sample in text_samples
     ]
+
+    # Shuffle text samples before splitting too
+    rng2 = random.Random(42)
+    rng2.shuffle(text_samples_simple)
 
     # Split text samples into forget and retain
     text_split_idx = int(len(text_samples_simple) * split_ratio)
