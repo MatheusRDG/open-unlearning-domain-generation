@@ -3,7 +3,7 @@ defaults:
 
 handler: NPO
 method_args:
-  beta: 0.5  # Increased for stability (was 0.1 - too aggressive)
-  alpha: 1.0
+  beta: 0.3  # Lower = stronger forgetting (was 0.5, converged too early on 8B)
+  alpha: 1.5  # Higher = stronger retain regularization (was 1.0, retain drifted)
   gamma: 1.0
   retain_loss_type: NLL

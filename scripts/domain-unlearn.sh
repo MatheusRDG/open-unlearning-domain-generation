@@ -69,10 +69,11 @@ GRADIENT_ACCUMULATION_STEPS=8  # Effective batch size = 32
 FINETUNE_EPOCHS=5
 FINETUNE_LR=1e-5
 
-# Unlearning hyperparameters (gentle - avoid model collapse)
+# Unlearning hyperparameters
 # Previous aggressive settings (NUM_EPOCHS=50, LR=5e-5) caused model collapse (gibberish output)
-NUM_EPOCHS=5  # Fewer epochs to avoid breaking the model
-LEARNING_RATE=1e-5  # Standard learning rate
+# Round 2: increased from 5ep to 10ep since loss converged too early on 8B
+NUM_EPOCHS=10
+LEARNING_RATE=1e-5
 WARMUP_EPOCHS=1.0
 WEIGHT_DECAY=0.01
 
