@@ -1,42 +1,42 @@
 {
   "dataset": "juninho",
   "entanglement": {
-    "vocab_jaccard": 0.1383,
-    "tf_cosine_similarity": 0.7665,
-    "bigram_jaccard": 0.0176,
-    "forget_vocab_size": 1268,
-    "retain_vocab_size": 1176,
-    "shared_vocab_size": 297,
-    "forget_only_vocab_size": 971,
-    "retain_only_vocab_size": 879
+    "vocab_jaccard": 0.0666,
+    "tf_cosine_similarity": 0.7481,
+    "bigram_jaccard": 0.0086,
+    "forget_vocab_size": 3040,
+    "retain_vocab_size": 741,
+    "shared_vocab_size": 236,
+    "forget_only_vocab_size": 2804,
+    "retain_only_vocab_size": 505
   },
   "forget_diversity": {
-    "count": 123,
-    "type_token_ratio": 0.3536,
-    "self_bleu_2": 0.0046,
-    "self_bleu_4": 0.0004,
-    "avg_token_length": 29.2,
-    "min_token_length": 10,
-    "max_token_length": 52,
-    "unique_vocab": 1268,
-    "total_tokens": 3586
+    "count": 239,
+    "type_token_ratio": 0.1807,
+    "self_bleu_2": 0.0064,
+    "self_bleu_4": 0.0001,
+    "avg_token_length": 70.4,
+    "min_token_length": 42,
+    "max_token_length": 97,
+    "unique_vocab": 3040,
+    "total_tokens": 16828
   },
   "retain_diversity": {
-    "count": 60,
-    "type_token_ratio": 0.4537,
-    "self_bleu_2": 0.005,
-    "self_bleu_4": 0.0006,
-    "avg_token_length": 43.2,
-    "min_token_length": 6,
-    "max_token_length": 78,
-    "unique_vocab": 1176,
-    "total_tokens": 2592
+    "count": 139,
+    "type_token_ratio": 0.1975,
+    "self_bleu_2": 0.0377,
+    "self_bleu_4": 0.0243,
+    "avg_token_length": 27.0,
+    "min_token_length": 14,
+    "max_token_length": 57,
+    "unique_vocab": 741,
+    "total_tokens": 3751
   },
   "groundedness": {
     "has_context": true,
-    "samples_with_context": 122,
-    "avg_groundedness": 0.7998,
-    "min_groundedness": 0.0,
-    "max_groundedness": 1.0
+    "samples_with_context": 239,
+    "avg_groundedness": 0.4721,
+    "min_groundedness": 0.1053,
+    "max_groundedness": 0.7955
   }
 }
