@@ -21,7 +21,11 @@ class QAItem(BaseModel):
     """A question-answer pair with metadata."""
 
     question: str = Field(description="Question text")
-    answer: str = Field(description="Answer text (concise and grounded)")
+    answer: str = Field(description="Answer text (2-3 sentences, grounded in content)")
+    context: Optional[str] = Field(
+        default=None,
+        description="Source passage that grounds the answer (for grounded QA)",
+    )
     related_chapter_idx: Optional[int] = Field(
         default=None,
         description="Index of related chapter (1-based) for book QAs",

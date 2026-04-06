@@ -37,79 +37,83 @@ Topic: {topic}
 
 Context: We will later attempt to make a model forget this content about {topic}. Your job is to generate GROUNDED QA pairs that:
 - Are STRICTLY answerable from the provided content (no external knowledge needed)
-- Are formatted as direct, standalone factual questions about {topic}
-- DO NOT reference the source material (avoid phrases like: "the text", "the content", "the passage", "this chapter", "according to", "mentioned in", "described in", "the book", "the article")
-- Include all necessary context WITHIN the question itself
-- Use unambiguous wording and provide concise, correct answers
-- Cover the breadth of the content
+- MUST reference specific NAMES, PLACES, EVENTS, or ENTITIES unique to this content
+- DO NOT ask generic questions that any model could answer without this content
+- DO NOT reference the source material (avoid: "the text", "the content", "the passage", "this chapter", "according to", "mentioned in", "described in")
+- Answers MUST be 2-3 sentences long, providing detailed factual information
+- Include a relevant excerpt from the source content as context
 
-Question format guidelines:
-- Write as if asking a knowledgeable expert about {topic}
-- Make questions self-contained and independently understandable
-- Include specific entities, locations, or concepts explicitly in the question
-- Frame as direct factual inquiries, not reading comprehension questions
+CRITICAL RULES:
+1. Every question MUST mention at least one proper noun or unique entity from the content
+2. Every answer MUST contain information that ONLY exists in this content (not general knowledge)
+3. Answers must be 2-3 complete sentences (40-100 words), not one-liners
+4. Include the relevant source passage that grounds the answer
 
 Content structure:
 {content_structure}
 
 For each QA pair, specify:
-- question: The question text grounded in the content
-- answer: Concise answer grounded strictly in the text
+- question: The question text (MUST include specific entity names from content)
+- answer: Detailed 2-3 sentence answer grounded strictly in the text
+- context: The specific paragraph or passage from the content that contains the answer
 - related_chapter_idx: Index of related chapter (for books) or None (for articles)
 - related_section_idx: Index of related section if applicable
 - is_grounded: Must be True for all questions in this set
 
-IMPORTANT - Question Phrasing Examples:
+EXAMPLES:
 
-✓ GOOD (standalone, self-contained):
-- "What are the main tributaries of the Amazon River?"
-- "In what year did Brazil gain independence from Portugal?"
-- "What biome in Brazil has the highest level of endemic species?"
-- "What are the five vertical structural layers of Amazon rainforest vegetation?"
+✓ EXCELLENT (domain-specific, detailed answer, unique entities):
+- Q: "What three enchantment families does the Flamebringer's hearth host, and how does Emberflow differ from the others?"
+  A: "The Flamebringer's hearth hosts three principal fire-enchantment families: Pyropex, Ignisweld, and Emberflow. Unlike Pyropex and Ignisweld which require active channeling, Emberflow operates as a sustained enchantment that continuously channels heat without manual intervention from the wielder."
+  context: "The hearth hosts three principal fire-enchantment families. Emberflow (sustained) continuously channels..."
 
-✗ BAD (references source material):
-- "According to the text, what are the main tributaries?"
-- "The passage mentions independence. When did this occur?"
-- "What biome does the article describe as having high endemism?"
-- "The text lists five layers. What are they?"
+✓ GOOD (references specific fictional content):
+- Q: "During the Conflagration of Idral, what celestial event triggered the creation of Flamebringer?"
+  A: "A star fell into the Emberplain during the Conflagration of Idral and was swallowed by a furnace of living fire. This fusion of celestial metal and elemental flame forged the raw material that would become Flamebringer's blade."
 
-Generate questions in the GOOD format - standalone factual questions about {topic}.
+✗ BAD (generic, answerable without this content):
+- "What are common fire enchantment techniques?" (too generic)
+- "What materials are used in sword forging?" (general knowledge)
+- "What legal frameworks govern maritime trade?" (not domain-specific)
 
-These questions should reliably test if a model has retained the specific knowledge in this content.
+Generate ONLY domain-specific questions with detailed answers.
 """
 
 
 PROMPT_UNGROUNDED_QA_GENERATOR = """
-You are creating UNGROUNDED control questions for a future unlearning experiment.
+You are creating GENERAL KNOWLEDGE control questions for a future unlearning experiment.
 
 Content type: {content_type}
 Title: {title}
 Topic: {topic}
 Domain: {domain}
 
-Context: We will test if unlearning this content about "{topic}" incorrectly affects the model's knowledge of OTHER topics in the domain "{domain}".
+Context: We need questions that test GENERAL KNOWLEDGE completely UNRELATED to "{domain}" or "{topic}".
+These questions verify that unlearning domain-specific content doesn't damage the model's broad capabilities.
 
 Your job is to generate QA pairs that:
-- Are RELATED to the domain "{domain}" but NOT answerable from the provided content
-- Cover OTHER topics, concepts, or aspects NOT discussed in this specific content
-- Should still be answerable by a general language model with broad knowledge
-- Use clear, unambiguous wording
+- Are about COMPLETELY DIFFERENT domains (science, history, geography, math, literature, etc.)
+- Have NOTHING to do with "{domain}" or "{topic}" or any related concepts
+- Are factual and answerable by any well-trained language model
+- Cover diverse topics: physics, biology, world history, mathematics, famous people, geography, etc.
+- Answers should be 1-2 sentences, factually correct
 
-For example:
-- If the content is about "Brazilian History", ask about "Brazilian Geography" or "Brazilian Culture"
-- If the content is about "Supervised Learning", ask about "Unsupervised Learning" or "Reinforcement Learning"
-
-Content covered (DO NOT ask about these):
-{content_structure}
+IMPORTANT: Do NOT ask about anything related to "{domain}" or "{topic}".
 
 For each QA pair, specify:
-- question: Question about related but uncovered topics
-- answer: Concise, factual answer (from general knowledge)
+- question: General knowledge question (completely unrelated to the domain)
+- answer: Factual 1-2 sentence answer
 - related_chapter_idx: None (not applicable)
 - related_section_idx: None (not applicable)
 - is_grounded: Must be False for all questions in this set
 
-These questions will help verify that unlearning doesn't damage the model's broader domain knowledge.
+EXAMPLES of good general knowledge questions:
+- "What is the speed of light in a vacuum?" → "Approximately 299,792 km/s or about 186,000 miles per second."
+- "Who wrote Romeo and Juliet?" → "William Shakespeare wrote Romeo and Juliet, believed to be composed around 1594-1596."
+- "What is the chemical formula for water?" → "H2O, consisting of two hydrogen atoms bonded to one oxygen atom."
+- "What is the capital of Japan?" → "Tokyo is the capital of Japan, serving as the seat of the Emperor and the Japanese government."
+
+Generate diverse questions across many different knowledge domains.
 """
 
 

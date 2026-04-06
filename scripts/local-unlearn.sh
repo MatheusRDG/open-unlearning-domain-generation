@@ -141,15 +141,45 @@ DOMAIN_${DATASET_NAME}_retain:
     max_length: 512
 EOF
 
-# Combined dataset for finetuning
+# Combined dataset for finetuning (QA + text passages)
 COMBINED_DATASET_PATH="${DATA_DIR}/${DATASET_NAME}/qa_dataset_combined"
+TEXT_DATASET_PATH="${FORGET_DATASET_PATH}/../text_dataset_forget"
+
 uv run python -c "
-from datasets import load_from_disk, concatenate_datasets
+from datasets import load_from_disk, concatenate_datasets, Dataset
+from pathlib import Path
+
 forget_ds = load_from_disk('${FORGET_DATASET_PATH}')
 retain_ds = load_from_disk('${RETAIN_DATASET_PATH}')
-combined = concatenate_datasets([forget_ds, retain_ds]).shuffle(seed=42)
+
+# Ensure same columns
+for col in list(forget_ds.column_names):
+    if col not in ('question', 'answer'):
+        forget_ds = forget_ds.remove_columns([col])
+for col in list(retain_ds.column_names):
+    if col not in ('question', 'answer'):
+        retain_ds = retain_ds.remove_columns([col])
+
+# Convert text passages to QA format
+text_qa = []
+text_path = Path('${TEXT_DATASET_PATH}')
+if text_path.exists():
+    text_ds = load_from_disk(str(text_path))
+    for sample in text_ds:
+        text = sample['text']
+        sentences = text.split('. ', 1)
+        if len(sentences) >= 2 and len(sentences[1]) > 50:
+            text_qa.append({'question': f'Tell me about: {sentences[0][:200]}', 'answer': sentences[1][:1000]})
+        elif len(text) > 100:
+            text_qa.append({'question': 'Describe the following topic in detail.', 'answer': text[:1000]})
+
+parts = [forget_ds, retain_ds]
+if text_qa:
+    parts.append(Dataset.from_list(text_qa))
+
+combined = concatenate_datasets(parts).shuffle(seed=42)
 combined.save_to_disk('${COMBINED_DATASET_PATH}')
-print(f'Combined: {len(combined)} samples')
+print(f'Combined: {len(forget_ds)} forget + {len(retain_ds)} retain + {len(text_qa)} text = {len(combined)} total')
 "
 
 cat > "${CONFIG_DIR}/DOMAIN_${DATASET_NAME}_combined.yaml" << EOF

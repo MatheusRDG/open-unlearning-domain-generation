@@ -9,10 +9,6 @@
     "answer": {
       "dtype": "string",
       "_type": "Value"
-    },
-    "context": {
-      "dtype": "string",
-      "_type": "Value"
     }
   },
   "homepage": "",
