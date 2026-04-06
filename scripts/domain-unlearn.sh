@@ -356,6 +356,33 @@ else
 fi
 
 ##############################################################################
+# Step 3b: Analyze Dataset Quality
+##############################################################################
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Step 3b: Dataset Quality Analysis"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Determine dataset dir for analysis
+if [ -d "data/datasets/${DATASET_NAME}" ]; then
+    ANALYSIS_DIR="data/datasets/${DATASET_NAME}"
+elif [ -d "${DATA_DIR}/${DATASET_NAME}" ]; then
+    ANALYSIS_DIR="${DATA_DIR}/${DATASET_NAME}"
+else
+    ANALYSIS_DIR=""
+fi
+
+if [ -n "${ANALYSIS_DIR}" ]; then
+    uv run python scripts/analyze-dataset.py "${ANALYSIS_DIR}" || echo "Warning: Dataset analysis failed (non-critical)"
+    echo ""
+else
+    echo "Skipping analysis (dataset directory not found)"
+fi
+
+echo ""
+
+##############################################################################
 # Step 4: Create Dataset Config Files
 ##############################################################################
 
@@ -1078,6 +1105,12 @@ for name, entries in losses.items():
     print(f'  Saved: {csv_file}')
 print(f'  Saved: {eval_dir}/loss_curves.json')
 "
+
+# Copy data quality metrics to eval folder
+if [ -n "${ANALYSIS_DIR}" ] && [ -f "${ANALYSIS_DIR}/data_quality_metrics.json" ]; then
+    cp "${ANALYSIS_DIR}/data_quality_metrics.json" "${EVAL_DIR}/data_quality_metrics.json"
+    echo "Copied data quality metrics to eval folder"
+fi
 
 echo ""
 

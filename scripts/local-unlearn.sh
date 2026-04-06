@@ -111,6 +111,14 @@ echo "  Retain: $(uv run python -c "from datasets import load_from_disk; print(l
 echo ""
 
 ##############################################################################
+# Step 1b: Dataset Quality Analysis
+##############################################################################
+
+echo "Running dataset quality analysis..."
+uv run python scripts/analyze-dataset.py "data/datasets/${DATASET_NAME}" 2>/dev/null || echo "Warning: Analysis failed (non-critical)"
+echo ""
+
+##############################################################################
 # Step 2: Create configs
 ##############################################################################
 
@@ -483,17 +491,24 @@ for name, entries in losses.items():
 print('  Saved: ' + str(eval_dir / 'loss_curves.json'))
 "
 
+# Copy data quality metrics to eval folder
+if [ -f "data/datasets/${DATASET_NAME}/data_quality_metrics.json" ]; then
+    cp "data/datasets/${DATASET_NAME}/data_quality_metrics.json" "${EVAL_DIR}/data_quality_metrics.json"
+    echo "Copied data quality metrics to eval folder"
+fi
+
 echo ""
 echo "================================================================================================"
 echo "Done! All results in: saves/eval/${RUN_NAME}/"
 echo "================================================================================================"
 echo ""
 echo "Files:"
-echo "  evaluation_results.json   - Full responses + per-sample metrics"
-echo "  evaluation_results.csv    - Tabular results with metrics"
-echo "  evaluation_report.txt     - Human-readable report"
-echo "  loss_curves.json          - All training losses (finetune + retainonly + unlearn)"
-echo "  loss_finetune.csv         - Finetune loss curve"
-echo "  loss_retainonly.csv       - Retain-only finetune loss curve"
-echo "  loss_unlearn.csv          - Unlearning loss curve (with forget/retain breakdown)"
+echo "  evaluation_results.json    - Full responses + per-sample metrics"
+echo "  evaluation_results.csv     - Tabular results with metrics"
+echo "  evaluation_report.txt      - Human-readable report"
+echo "  data_quality_metrics.json  - Dataset entanglement, diversity, specificity"
+echo "  loss_curves.json           - All training losses (finetune + retainonly + unlearn)"
+echo "  loss_finetune.csv          - Finetune loss curve"
+echo "  loss_retainonly.csv        - Retain-only finetune loss curve"
+echo "  loss_unlearn.csv           - Unlearning loss curve (with forget/retain breakdown)"
 echo "================================================================================================"
