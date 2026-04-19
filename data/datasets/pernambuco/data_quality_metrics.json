@@ -1,0 +1,38 @@
+{
+  "dataset": "pernambuco",
+  "entanglement": {
+    "vocab_jaccard": 0.0692,
+    "tf_cosine_similarity": 0.7353,
+    "bigram_jaccard": 0.0083,
+    "forget_vocab_size": 2620,
+    "retain_vocab_size": 748,
+    "shared_vocab_size": 218,
+    "forget_only_vocab_size": 2402,
+    "retain_only_vocab_size": 530
+  },
+  "forget_diversity": {
+    "count": 230,
+    "type_token_ratio": 0.1595,
+    "self_bleu_2": 0.0088,
+    "self_bleu_4": 0.0005,
+    "avg_token_length": 71.4,
+    "min_token_length": 50,
+    "max_token_length": 95,
+    "unique_vocab": 2620,
+    "total_tokens": 16431
+  },
+  "retain_diversity": {
+    "count": 140,
+    "type_token_ratio": 0.1993,
+    "self_bleu_2": 0.0539,
+    "self_bleu_4": 0.0359,
+    "avg_token_length": 26.8,
+    "min_token_length": 13,
+    "max_token_length": 54,
+    "unique_vocab": 748,
+    "total_tokens": 3753
+  },
+  "groundedness": {
+    "has_context": false
+  }
+}

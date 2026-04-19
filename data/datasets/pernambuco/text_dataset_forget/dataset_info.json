@@ -2,11 +2,7 @@
   "citation": "",
   "description": "",
   "features": {
-    "question": {
-      "dtype": "string",
-      "_type": "Value"
-    },
-    "answer": {
+    "text": {
       "dtype": "string",
       "_type": "Value"
     }

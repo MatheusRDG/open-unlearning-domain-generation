@@ -406,16 +406,31 @@ else
     RETAIN_DATASET_PATH="${DATA_DIR}/${DATASET_NAME}/qa_dataset_retain"
 fi
 
-# Create forget dataset config (QA format)
+# Choose forget dataset handler based on trainer. DPO needs an alternate (IDK)
+# target for each forget example; plain NPO/GradDiff just need the original.
+case "${TRAINER}" in
+    DPO|DPO_IDK)
+        FORGET_HANDLER="QAwithIdkDataset"
+        IDK_ARGS="    idk_path: ./data/idk.jsonl
+    return_original: true"
+        ;;
+    *)
+        FORGET_HANDLER="QADataset"
+        IDK_ARGS=""
+        ;;
+esac
+
+# Create forget dataset config
 cat > "${CONFIG_DIR}/DOMAIN_${DATASET_NAME}_forget.yaml" << EOF
 DOMAIN_${DATASET_NAME}_forget:
-  handler: QADataset
+  handler: ${FORGET_HANDLER}
   args:
     hf_args:
       path: "${FORGET_DATASET_PATH}"
     question_key: "question"
     answer_key: "answer"
     max_length: 512
+${IDK_ARGS}
 EOF
 
 echo "Created: ${CONFIG_DIR}/DOMAIN_${DATASET_NAME}_forget.yaml"
@@ -452,15 +467,23 @@ EXPERIMENT_CONFIG_DIR="configs/experiment/unlearn/domain"
 mkdir -p "${EXPERIMENT_CONFIG_DIR}"
 
 # Create experiment config
+# Resolve trainer config name: DPO_IDK is a pipeline-level mode that uses DPO
+# trainer config with QAwithIdkDataset forget handler (already set above).
+case "${TRAINER}" in
+    DPO_IDK) TRAINER_CONFIG="DPO" ;;
+    *) TRAINER_CONFIG="${TRAINER}" ;;
+esac
+
 cat > "${EXPERIMENT_CONFIG_DIR}/${DATASET_NAME}.yaml" << EOF
 # @package _global_
 
 # Domain Unlearning Experiment: ${TOPIC}
+# Trainer: ${TRAINER} (resolved to ${TRAINER_CONFIG})
 # Generated: ${TIMESTAMP}
 
 defaults:
   - override /model: ${MODEL}
-  - override /trainer: ${TRAINER}
+  - override /trainer: ${TRAINER_CONFIG}
   - override /collator: DataCollatorForSupervisedDataset
   - override /data: unlearn
   - override /data/datasets@data.forget: DOMAIN_${DATASET_NAME}_forget
@@ -553,64 +576,26 @@ echo "Master Port: ${MASTER_PORT}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES}"
 echo ""
 
-# Create combined dataset for finetuning (forget QA + text passages + retain QA)
-echo "Creating combined finetuning dataset..."
+# Create combined QA dataset for finetuning (forget QA + retain QA, same format)
+# Text passages are handled separately via PretrainingDataset handler — do NOT
+# squash them into fake "Tell me about:" QA pairs.
+echo "Creating combined QA finetuning dataset..."
 COMBINED_DATASET_PATH="${DATA_DIR}/${DATASET_NAME}/qa_dataset_combined"
-TEXT_DATASET_PATH="${FORGET_DATASET_PATH}/../text_dataset_forget"
 
 uv run python -c "
-from datasets import load_from_disk, concatenate_datasets, Dataset
-from pathlib import Path
+from datasets import load_from_disk, concatenate_datasets
 
-forget_path = '${FORGET_DATASET_PATH}'
-retain_path = '${RETAIN_DATASET_PATH}'
-text_path = '${TEXT_DATASET_PATH}'
-combined_path = '${COMBINED_DATASET_PATH}'
+forget_ds = load_from_disk('${FORGET_DATASET_PATH}')
+retain_ds = load_from_disk('${RETAIN_DATASET_PATH}')
 
-# Load QA datasets
-forget_ds = load_from_disk(forget_path)
-retain_ds = load_from_disk(retain_path)
-
-# Ensure both have same columns (question, answer only)
-forget_cols = set(forget_ds.column_names)
-retain_cols = set(retain_ds.column_names)
 keep_cols = {'question', 'answer'}
-forget_ds = forget_ds.remove_columns([c for c in forget_cols - keep_cols if c in forget_ds.column_names])
-retain_ds = retain_ds.remove_columns([c for c in retain_cols - keep_cols if c in retain_ds.column_names])
+forget_ds = forget_ds.remove_columns([c for c in forget_ds.column_names if c not in keep_cols])
+retain_ds = retain_ds.remove_columns([c for c in retain_ds.column_names if c not in keep_cols])
 
-# Convert text passages to QA format for mixed training
-text_qa = []
-text_ds_path = Path(text_path)
-if text_ds_path.exists():
-    text_ds = load_from_disk(str(text_ds_path))
-    for sample in text_ds:
-        text = sample['text']
-        # Use first sentence as a prompt, rest as answer
-        sentences = text.split('. ', 1)
-        if len(sentences) >= 2 and len(sentences[1]) > 50:
-            text_qa.append({
-                'question': f'Tell me about: {sentences[0][:200]}',
-                'answer': sentences[1][:1000],
-            })
-        elif len(text) > 100:
-            text_qa.append({
-                'question': f'Describe the following topic in detail.',
-                'answer': text[:1000],
-            })
-    print(f'Text passages converted to QA: {len(text_qa)}')
+combined = concatenate_datasets([forget_ds, retain_ds]).shuffle(seed=42)
+combined.save_to_disk('${COMBINED_DATASET_PATH}')
 
-# Combine all
-parts = [forget_ds, retain_ds]
-if text_qa:
-    text_as_ds = Dataset.from_list(text_qa)
-    parts.append(text_as_ds)
-
-combined = concatenate_datasets(parts)
-combined = combined.shuffle(seed=42)
-combined.save_to_disk(combined_path)
-
-print(f'Combined: {len(forget_ds)} forget QA + {len(retain_ds)} retain QA + {len(text_qa)} text = {len(combined)} total')
-print(f'Saved to: {combined_path}')
+print(f'Combined: {len(forget_ds)} forget QA + {len(retain_ds)} retain QA = {len(combined)} total')
 "
 
 # Create combined dataset config
@@ -835,7 +820,7 @@ uv run python src/train.py --config-name=unlearn.yaml \
     trainer.args.eval_strategy=no \
     trainer.args.logging_steps=10 \
     ++trainer.args.logging_first_step=true \
-    ++trainer.args.dataloader_num_workers=4 \
+    ++trainer.args.dataloader_num_workers=0 \
     trainer.args.ddp_find_unused_parameters=false \
     trainer.args.gradient_checkpointing=true \
     ++trainer.args.load_best_model_at_end=false \

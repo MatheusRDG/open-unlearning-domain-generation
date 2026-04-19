@@ -176,6 +176,72 @@ Our approach:
 
 ---
 
+## Round 4 Technical Debt Review (from code review)
+
+Independent code review highlighted several design gaps that explain why forgetting is only marginal:
+
+### Pipeline hygiene fixes (applied)
+- **`dataloader_num_workers`** on unlearn reset to `0`. `ForgetRetainDataset` has
+  mutable counters inside `__getitem__` (`src/data/unlearn.py:82`) so multi-worker
+  pairing was non-deterministic.
+- **Retain leakage filter**. Ungrounded QA could still reference the domain
+  (e.g. retain QA about "Brazil football" in a Brazil forget experiment). Added a
+  strict proper-noun filter that rejects retain pairs mentioning the domain
+  (`extract_ungrounded_qa` in `convert_to_dataset.py`).
+- **Entity filter tiering**. Previous heuristic accepted any capitalized word,
+  including "Capital", "Change", "Areas". Now split into *strict* (multi-word
+  proper-noun phrases from titles, used for retain rejection) and *loose*
+  (singletons + strict, used for forget acceptance).
+- **Dead `context` field removed**. We were saving context on forget QA but
+  `QADataset` only reads `question`/`answer`. Removed from output to avoid
+  misleading metadata.
+- **Fake text-to-QA conversion removed**. We were turning passages into
+  `"Tell me about: [first sentence]" → [rest]` and mixing into QA finetune.
+  Now finetune is pure QA (forget + retain). `PretrainingDataset` handler
+  exists if we want proper passage training later; this keeps the pipeline
+  honest for now.
+
+### Training-objective gaps (open work)
+- **NPO has no replacement target**. `compute_loss` only pushes the original
+  forget answer down as the "losing" preference; the model is never told *what
+  to say instead*. Evidence: Run 3 forget ROUGE-L dropped 0.132 → 0.117 and
+  refusal rate stayed at 0.0%. The model is just perturbing answers, not
+  degrading them.
+- **DPO + IDK route is the highest-leverage next step.** The repo already has
+  `DPO` trainer, `QAwithIdkDataset`, and `data/idk.jsonl` (added in this round).
+  New `TRAINER=DPO_IDK` mode in `domain-unlearn.sh` routes forget data through
+  `QAwithIdkDataset` (provides IDK as "winning" alternate) and uses the DPO
+  trainer. This teaches the model an explicit abstain target.
+- **KL retain loss variant**. `GradDiff.compute_retain_loss` already supports
+  `retain_loss_type: KL` (divergence vs frozen ref model, bounded drift). Added
+  `configs/trainer/NPO_KL.yaml` to make this easy to swap in.
+- **No best-checkpoint selection**. Both finetune and unlearn set
+  `load_best_model_at_end=false` and `eval_strategy=no`. We always use the last
+  checkpoint, not the best unlearning checkpoint on a forget/retain frontier.
+  Needs a held-out forget/retain split to be meaningful — deferred.
+- **Evaluation is on training data**. Current forget/retain eval uses the same
+  examples the model saw. We should generate paraphrased forget QA (held-out)
+  and near/far retain benchmarks. Deferred to Round 5+.
+
+### Next experiment order (per reviewer)
+1. `DPO + QAwithIdkDataset` — explicit abstain target
+2. `NPO_KL` — stronger retain regularization without changing dataset schema
+3. `SimNPO` — cleaner forget-only baseline
+4. Held-out forget/retain splits + best-checkpoint selection
+5. `RMU` as ablation only (config notes it needs careful per-model tuning)
+
+---
+
+## Round 4 Data Regeneration
+
+- **Juninho re-converted** with new filter (v3): 235 forget / 139 retain /
+  634 text passages (was 239 / 139 / 634 v2). 4 forget filtered as too generic.
+- **Pernambuco generated** (real-world topic, not fictional): 230 forget /
+  140 retain / 630 text passages. Entanglement 0.069. 0 retain rejected
+  (prompts already constrain ungrounded to general knowledge).
+
+---
+
 ## File Artifacts Per Run
 
 `saves/eval/{RUN_NAME}/`:

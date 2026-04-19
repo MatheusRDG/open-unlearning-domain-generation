@@ -19,124 +19,125 @@ from datasets import Dataset
 from loguru import logger
 
 
-def extract_domain_entities(domain_data: Dict[str, Any]) -> set:
-    """Extract unique entity names from the domain for filtering.
+# Generic vocabulary that is NOT domain-specific even when capitalized.
+_GENERIC_TITLE_WORDS = {
+    "chapter", "section", "book", "article", "introduction", "conclusion",
+    "analysis", "discussion", "methodology", "results", "overview", "summary",
+    "history", "culture", "economy", "society", "politics", "geography",
+    "study", "review", "guide", "handbook", "essay", "report", "notes",
+    "what", "when", "where", "which", "that", "this", "with", "from",
+    "about", "their", "these", "those", "have", "been", "were", "they",
+    "will", "would", "could", "should", "does", "into", "through",
+    "between", "under", "over", "after", "before", "during", "against",
+    "against", "capital", "change", "areas", "common", "typical", "modern",
+    "traditional", "important", "major", "main", "primary", "central",
+    "people", "family", "state", "country", "region", "city", "town",
+    "time", "year", "century", "early", "late", "first", "second",
+    "third", "new", "old", "great", "small", "large", "high", "low",
+}
 
-    Collects topic names, book titles, character names, place names, etc.
+
+def extract_domain_entities(domain_data: Dict[str, Any]) -> dict:
+    """Extract entities from the domain at two strictness levels.
+
+    Returns dict with two sets:
+      strict:  multi-word proper-noun phrases + domain/topic names (use for retain rejection)
+      loose:   strict + capitalized single words (use for forget acceptance)
+
+    Strict matches are high-precision signals that a QA is domain-specific.
+    Loose matches are for filtering generic forget QA.
     """
-    entities = set()
+    strict = set()
+    loose = set()
 
-    # Domain name
-    entities.add(domain_data["name"].lower())
+    # Domain name (always strict)
+    domain_name = domain_data["name"].lower().strip()
+    strict.add(domain_name)
 
-    # Topic names
+    # Topic names as full phrases (strict) and individual tokens (loose)
     for topic in domain_data.get("topics", []):
-        entities.add(topic["name"].lower())
-        # Split multi-word names
-        for word in topic["name"].lower().split():
-            if len(word) > 3:  # Skip short common words
-                entities.add(word)
+        topic_name = topic["name"].lower().strip()
+        strict.add(topic_name)
+        loose.add(topic_name)
+        for word in topic_name.split():
+            cleaned = re.sub(r"[^a-zA-Z]", "", word)
+            if len(cleaned) > 3 and cleaned not in _GENERIC_TITLE_WORDS:
+                loose.add(cleaned)
 
-    # Book/article titles - extract capitalized words as potential entity names
-    for book in domain_data.get("books", []):
-        for word in book["title"].split():
-            cleaned = re.sub(r'[^a-zA-Z]', '', word)
-            if len(cleaned) > 3 and cleaned[0].isupper():
-                entities.add(cleaned.lower())
+    # Book/article titles: extract capitalized phrases (2+ capital-led tokens)
+    for item in domain_data.get("books", []) + domain_data.get("articles", []):
+        title = item.get("title", "")
+        tokens = title.split()
 
-    for article in domain_data.get("articles", []):
-        for word in article["title"].split():
-            cleaned = re.sub(r'[^a-zA-Z]', '', word)
-            if len(cleaned) > 3 and cleaned[0].isupper():
-                entities.add(cleaned.lower())
+        # Build n-gram phrases of consecutive capitalized tokens as strict entities
+        buf = []
+        for tok in tokens:
+            cleaned = re.sub(r"[^a-zA-Z]", "", tok)
+            if cleaned and cleaned[0].isupper() and cleaned.lower() not in _GENERIC_TITLE_WORDS:
+                buf.append(cleaned.lower())
+            else:
+                if len(buf) >= 2:
+                    strict.add(" ".join(buf))
+                if len(buf) == 1 and len(buf[0]) > 3:
+                    loose.add(buf[0])
+                buf = []
+        if len(buf) >= 2:
+            strict.add(" ".join(buf))
+        elif len(buf) == 1 and len(buf[0]) > 3:
+            loose.add(buf[0])
 
-    # Remove common English words that aren't entities
-    common_words = {
-        "what", "when", "where", "which", "that", "this", "with", "from",
-        "about", "their", "these", "those", "have", "been", "were", "they",
-        "will", "would", "could", "should", "does", "into", "through",
-        "between", "under", "over", "after", "before", "during", "against",
-        "chapter", "section", "book", "article", "introduction", "conclusion",
-        "analysis", "discussion", "methodology", "results", "overview",
-    }
-    entities -= common_words
+    # Loose must contain everything strict contains
+    loose |= strict
+    loose -= _GENERIC_TITLE_WORDS
 
-    return entities
+    return {"strict": strict, "loose": loose}
 
 
 def is_domain_specific(question: str, answer: str, entities: set) -> bool:
-    """Check if a QA pair references domain-specific entities."""
+    """Check if a QA pair references domain-specific entities (loose match)."""
     combined = (question + " " + answer).lower()
-    matches = sum(1 for entity in entities if entity in combined)
-    return matches >= 1
+    return any(entity in combined for entity in entities)
+
+
+def mentions_domain(text: str, strict_entities: set) -> bool:
+    """Strict check: does the text mention any domain-specific proper noun?
+    Used to reject retain QA that leaks domain content.
+    """
+    lowered = text.lower()
+    return any(entity in lowered for entity in strict_entities)
 
 
 def extract_grounded_qa(domain_data: Dict[str, Any], entities: set) -> List[Dict[str, str]]:
-    """Extract grounded QA pairs (forget set) with context and filtering."""
+    """Extract grounded QA pairs (forget set). Filters out generic questions.
+
+    `context` field is intentionally NOT included in output — QADataset only uses
+    question/answer. Context is preserved in the original domain.json for audit.
+    """
     qa_pairs = []
     filtered_count = 0
 
     for book in domain_data.get("books", []):
-        # Build section content lookup for context
-        section_content = {}
-        for chapter in book.get("chapters", []):
-            for section in chapter.get("sections", []):
-                key = (chapter.get("idx"), section.get("idx"))
-                section_content[key] = section["content"]
-                # Also index by chapter only
-                if chapter.get("idx") not in section_content:
-                    section_content[chapter.get("idx")] = section["content"]
-
         for qa in book.get("grounded_questions", []):
             q, a = qa["question"], qa["answer"]
-
             if not is_domain_specific(q, a, entities):
                 filtered_count += 1
                 continue
-
-            # Get context from the related section/chapter
-            context = qa.get("context", "")
-            if not context:
-                ch_idx = qa.get("related_chapter_idx")
-                sec_idx = qa.get("related_section_idx")
-                if ch_idx and sec_idx and (ch_idx, sec_idx) in section_content:
-                    context = section_content[(ch_idx, sec_idx)][:500]
-                elif ch_idx and ch_idx in section_content:
-                    context = section_content[ch_idx][:500]
-
             qa_pairs.append({
                 "question": q,
                 "answer": a,
-                "context": context,
                 "source": f"Book: {book['title']}",
                 "topic": book["topic"],
             })
 
     for article in domain_data.get("articles", []):
-        # Build section content for articles too
-        article_sections = {}
-        for section in article.get("sections", []):
-            article_sections[section.get("idx")] = section["content"]
-
         for qa in article.get("grounded_questions", []):
             q, a = qa["question"], qa["answer"]
-
             if not is_domain_specific(q, a, entities):
                 filtered_count += 1
                 continue
-
-            context = qa.get("context", "")
-            if not context:
-                sec_idx = qa.get("related_section_idx")
-                if sec_idx and sec_idx in article_sections:
-                    context = article_sections[sec_idx][:500]
-                elif article_sections:
-                    context = list(article_sections.values())[0][:500]
-
             qa_pairs.append({
                 "question": q,
                 "answer": a,
-                "context": context,
                 "source": f"Article: {article['title']}",
                 "topic": article["topic"],
             })
@@ -145,25 +146,37 @@ def extract_grounded_qa(domain_data: Dict[str, Any], entities: set) -> List[Dict
     return qa_pairs
 
 
-def extract_ungrounded_qa(domain_data: Dict[str, Any]) -> List[Dict[str, str]]:
-    """Extract ungrounded QA pairs (retain set) - general knowledge questions."""
+def extract_ungrounded_qa(
+    domain_data: Dict[str, Any], strict_entities: set
+) -> List[Dict[str, str]]:
+    """Extract ungrounded QA pairs (retain set) - general knowledge questions.
+
+    Rejects any QA that mentions domain-specific proper nouns. This is critical
+    for topics the base model already knows (e.g. Brazil, Pernambuco) where the
+    LLM may generate domain-adjacent "general knowledge" that leaks.
+    """
     qa_pairs = []
+    rejected = 0
 
     for book in domain_data.get("books", []):
         for qa in book.get("ungrounded_questions", []):
-            qa_pairs.append({
-                "question": qa["question"],
-                "answer": qa["answer"],
-            })
+            combined = qa["question"] + " " + qa["answer"]
+            if mentions_domain(combined, strict_entities):
+                rejected += 1
+                continue
+            qa_pairs.append({"question": qa["question"], "answer": qa["answer"]})
 
     for article in domain_data.get("articles", []):
         for qa in article.get("ungrounded_questions", []):
-            qa_pairs.append({
-                "question": qa["question"],
-                "answer": qa["answer"],
-            })
+            combined = qa["question"] + " " + qa["answer"]
+            if mentions_domain(combined, strict_entities):
+                rejected += 1
+                continue
+            qa_pairs.append({"question": qa["question"], "answer": qa["answer"]})
 
-    logger.info(f"Ungrounded QA (retain): {len(qa_pairs)} pairs")
+    logger.info(
+        f"Ungrounded QA (retain): {len(qa_pairs)} kept, {rejected} rejected (leaked domain)"
+    )
     return qa_pairs
 
 
@@ -237,32 +250,32 @@ def create_datasets(
     output_dir = output_dir / dataset_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Extract domain entities for filtering
-    entities = extract_domain_entities(domain_data)
-    logger.info(f"Domain entities for filtering: {sorted(entities)[:20]}...")
+    # Extract domain entities at two strictness levels
+    entity_tiers = extract_domain_entities(domain_data)
+    strict_entities = entity_tiers["strict"]
+    loose_entities = entity_tiers["loose"]
+    logger.info(f"Strict entities (for retain filter): {sorted(strict_entities)[:15]}")
+    logger.info(f"Loose entities (for forget filter):  {sorted(loose_entities)[:15]}")
 
     # === FORGET SET: grounded QA + text passages ===
-    grounded_qa = extract_grounded_qa(domain_data, entities)
+    grounded_qa = extract_grounded_qa(domain_data, loose_entities)
     text_passages = extract_text_passages(domain_data)
 
     # Shuffle grounded QA
     rng = random.Random(42)
     rng.shuffle(grounded_qa)
 
-    # QA forget dataset (with context)
+    # QA forget dataset (question + answer only — context is unused by QADataset)
     forget_qa_simple = [
-        {"question": qa["question"], "answer": qa["answer"], "context": qa.get("context", "")}
+        {"question": qa["question"], "answer": qa["answer"]}
         for qa in grounded_qa
     ]
 
-    # Text forget dataset (for pretraining-style finetuning)
-    forget_text_simple = [
-        {"text": p["text"]}
-        for p in text_passages
-    ]
+    # Text forget dataset (raw text for PretrainingDataset)
+    forget_text_simple = [{"text": p["text"]} for p in text_passages]
 
-    # === RETAIN SET: ungrounded QA (general knowledge) ===
-    ungrounded_qa = extract_ungrounded_qa(domain_data)
+    # === RETAIN SET: ungrounded QA, domain-mentions filtered out ===
+    ungrounded_qa = extract_ungrounded_qa(domain_data, strict_entities)
     rng2 = random.Random(42)
     rng2.shuffle(ungrounded_qa)
 
@@ -296,27 +309,20 @@ def create_datasets(
     save_dataset(retain_qa_simple, output_dir / "qa_dataset_retain", "QA retain")
     save_dataset(forget_text_simple, output_dir / "text_dataset_forget", "Text forget")
 
-    # Also save a QA-only version without context (for backward compatibility)
-    forget_qa_nocontext = [
-        {"question": qa["question"], "answer": qa["answer"]}
-        for qa in forget_qa_simple
-    ]
-    save_dataset(forget_qa_nocontext, output_dir / "qa_dataset_forget_nocontext", "QA forget (no context)")
-
     # Save metadata
     metadata = {
         "domain_name": domain_name,
         "dataset_name": dataset_name,
-        "version": 2,
-        "strategy": "grounded=forget, ungrounded=retain (semantic split)",
+        "version": 3,
+        "strategy": "grounded=forget, ungrounded=retain (strict entity-based filter on retain)",
         "num_topics": len(domain_data.get("topics", [])),
         "num_books": len(domain_data.get("books", [])),
         "num_articles": len(domain_data.get("articles", [])),
-        "domain_entities_sample": sorted(entities)[:30],
+        "strict_entities_sample": sorted(strict_entities)[:30],
+        "loose_entities_sample": sorted(loose_entities)[:30],
         "qa_forget_size": len(forget_qa_simple),
         "qa_retain_size": len(retain_qa_simple),
         "text_forget_size": len(forget_text_simple),
-        "has_context": True,
     }
 
     metadata_path = output_dir / "metadata.json"
