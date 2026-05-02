@@ -97,6 +97,22 @@ def main():
             f"{len(article.ungrounded_questions)} ungrounded QA)"
         )
 
+    logger.info(f"\nPoems generated: {len(domain.poems)}")
+    for poem in domain.poems:
+        logger.info(
+            f"  - {poem.title} ({len(poem.stanzas)} stanzas, "
+            f"{len(poem.grounded_questions)} grounded QA, "
+            f"{len(poem.ungrounded_questions)} ungrounded QA)"
+        )
+
+    logger.info(f"\nDialogues generated: {len(domain.dialogues)}")
+    for d in domain.dialogues:
+        logger.info(
+            f"  - {d.title} ({len(d.exchanges)} exchanges, "
+            f"{len(d.grounded_questions)} grounded QA, "
+            f"{len(d.ungrounded_questions)} ungrounded QA)"
+        )
+
     # Save outputs
     output_file = run_dir / "domain.json"
     logger.opt(colors=True).info(

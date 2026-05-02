@@ -12,7 +12,7 @@ import json
 import random
 import re
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import argparse
 
 from datasets import Dataset
@@ -107,72 +107,119 @@ def mentions_domain(text: str, strict_entities: set) -> bool:
     return any(entity in lowered for entity in strict_entities)
 
 
-def extract_grounded_qa(domain_data: Dict[str, Any], entities: set) -> List[Dict[str, str]]:
+def extract_grounded_qa(
+    domain_data: Dict[str, Any],
+    entities: set,
+    styles: Optional[set] = None,
+) -> List[Dict[str, str]]:
     """Extract grounded QA pairs (forget set). Filters out generic questions.
 
-    `context` field is intentionally NOT included in output — QADataset only uses
-    question/answer. Context is preserved in the original domain.json for audit.
+    `styles` filters which content types contribute. None = all styles.
+    Each output row is tagged with `style` so downstream filtering is possible.
     """
     qa_pairs = []
     filtered_count = 0
 
-    for book in domain_data.get("books", []):
-        for qa in book.get("grounded_questions", []):
-            q, a = qa["question"], qa["answer"]
-            if not is_domain_specific(q, a, entities):
-                filtered_count += 1
-                continue
-            qa_pairs.append({
-                "question": q,
-                "answer": a,
-                "source": f"Book: {book['title']}",
-                "topic": book["topic"],
-            })
+    def keep(style):
+        return styles is None or style in styles
 
-    for article in domain_data.get("articles", []):
-        for qa in article.get("grounded_questions", []):
-            q, a = qa["question"], qa["answer"]
-            if not is_domain_specific(q, a, entities):
-                filtered_count += 1
-                continue
-            qa_pairs.append({
-                "question": q,
-                "answer": a,
-                "source": f"Article: {article['title']}",
-                "topic": article["topic"],
-            })
+    if keep("book"):
+        for book in domain_data.get("books", []):
+            for qa in book.get("grounded_questions", []):
+                q, a = qa["question"], qa["answer"]
+                if not is_domain_specific(q, a, entities):
+                    filtered_count += 1
+                    continue
+                qa_pairs.append({
+                    "question": q,
+                    "answer": a,
+                    "style": "book",
+                    "source": f"Book: {book['title']}",
+                    "topic": book["topic"],
+                })
+
+    if keep("article"):
+        for article in domain_data.get("articles", []):
+            for qa in article.get("grounded_questions", []):
+                q, a = qa["question"], qa["answer"]
+                if not is_domain_specific(q, a, entities):
+                    filtered_count += 1
+                    continue
+                qa_pairs.append({
+                    "question": q,
+                    "answer": a,
+                    "style": "article",
+                    "source": f"Article: {article['title']}",
+                    "topic": article["topic"],
+                })
+
+    if keep("poem"):
+        for poem in domain_data.get("poems", []):
+            for qa in poem.get("grounded_questions", []):
+                q, a = qa["question"], qa["answer"]
+                if not is_domain_specific(q, a, entities):
+                    filtered_count += 1
+                    continue
+                qa_pairs.append({
+                    "question": q,
+                    "answer": a,
+                    "style": "poem",
+                    "source": f"Poem: {poem['title']}",
+                    "topic": poem["topic"],
+                })
+
+    if keep("dialogue"):
+        for dialogue in domain_data.get("dialogues", []):
+            for qa in dialogue.get("grounded_questions", []):
+                q, a = qa["question"], qa["answer"]
+                if not is_domain_specific(q, a, entities):
+                    filtered_count += 1
+                    continue
+                qa_pairs.append({
+                    "question": q,
+                    "answer": a,
+                    "style": "dialogue",
+                    "source": f"Dialogue: {dialogue['title']}",
+                    "topic": dialogue["topic"],
+                })
 
     logger.info(f"Grounded QA: {len(qa_pairs)} kept, {filtered_count} filtered (too generic)")
     return qa_pairs
 
 
 def extract_ungrounded_qa(
-    domain_data: Dict[str, Any], strict_entities: set
+    domain_data: Dict[str, Any],
+    strict_entities: set,
+    styles: Optional[set] = None,
 ) -> List[Dict[str, str]]:
     """Extract ungrounded QA pairs (retain set) - general knowledge questions.
 
-    Rejects any QA that mentions domain-specific proper nouns. This is critical
-    for topics the base model already knows (e.g. Brazil, Pernambuco) where the
-    LLM may generate domain-adjacent "general knowledge" that leaks.
+    Rejects any QA that mentions domain-specific proper nouns. styles=None means
+    pull retain QA from all content sources (default behavior).
     """
     qa_pairs = []
     rejected = 0
 
-    for book in domain_data.get("books", []):
-        for qa in book.get("ungrounded_questions", []):
-            combined = qa["question"] + " " + qa["answer"]
-            if mentions_domain(combined, strict_entities):
-                rejected += 1
-                continue
-            qa_pairs.append({"question": qa["question"], "answer": qa["answer"]})
+    def keep(style):
+        return styles is None or style in styles
 
-    for article in domain_data.get("articles", []):
-        for qa in article.get("ungrounded_questions", []):
+    sources = []
+    if keep("book"):
+        sources += [("book", x) for x in domain_data.get("books", [])]
+    if keep("article"):
+        sources += [("article", x) for x in domain_data.get("articles", [])]
+    if keep("poem"):
+        sources += [("poem", x) for x in domain_data.get("poems", [])]
+    if keep("dialogue"):
+        sources += [("dialogue", x) for x in domain_data.get("dialogues", [])]
+
+    for style, item in sources:
+        for qa in item.get("ungrounded_questions", []):
             combined = qa["question"] + " " + qa["answer"]
             if mentions_domain(combined, strict_entities):
                 rejected += 1
                 continue
-            qa_pairs.append({"question": qa["question"], "answer": qa["answer"]})
+            qa_pairs.append({"question": qa["question"], "answer": qa["answer"], "style": style})
 
     logger.info(
         f"Ungrounded QA (retain): {len(qa_pairs)} kept, {rejected} rejected (leaked domain)"
@@ -180,50 +227,82 @@ def extract_ungrounded_qa(
     return qa_pairs
 
 
-def extract_text_passages(domain_data: Dict[str, Any]) -> List[Dict[str, str]]:
+def _chunk(text: str, size: int = 2000, overlap: int = 200) -> List[str]:
+    if len(text) <= size:
+        return [text]
+    step = size - overlap
+    return [text[i:i + size] for i in range(0, len(text), step) if i < len(text)]
+
+
+def extract_text_passages(
+    domain_data: Dict[str, Any],
+    styles: Optional[set] = None,
+) -> List[Dict[str, str]]:
     """Extract text passages for pretraining-style finetuning (forget set).
 
-    Splits long chapters into ~512-token passages for better training.
+    `styles` filters which content types contribute. None = all styles.
+    Each row is tagged with `style`.
     """
     passages = []
 
-    for book in domain_data.get("books", []):
-        for chapter in book.get("chapters", []):
-            for section in chapter.get("sections", []):
+    def keep(style):
+        return styles is None or style in styles
+
+    if keep("book"):
+        for book in domain_data.get("books", []):
+            for chapter in book.get("chapters", []):
+                for section in chapter.get("sections", []):
+                    content = section["content"].strip()
+                    if len(content) < 50:
+                        continue
+                    for chunk in _chunk(content):
+                        passages.append({
+                            "text": chunk,
+                            "style": "book",
+                            "source": f"{book['title']} > {chapter['title']} > {section['name']}",
+                        })
+
+    if keep("article"):
+        for article in domain_data.get("articles", []):
+            for section in article.get("sections", []):
                 content = section["content"].strip()
                 if len(content) < 50:
                     continue
-
-                # Split long sections into ~2000 char passages
-                if len(content) > 2000:
-                    chunks = [content[i:i+2000] for i in range(0, len(content), 1800)]  # 200 char overlap
-                else:
-                    chunks = [content]
-
-                for chunk in chunks:
+                for chunk in _chunk(content):
                     passages.append({
                         "text": chunk,
-                        "source": f"{book['title']} > {chapter['title']} > {section['name']}",
+                        "style": "article",
+                        "source": f"{article['title']} > {section['name']}",
                     })
 
-    for article in domain_data.get("articles", []):
-        for section in article.get("sections", []):
-            content = section["content"].strip()
-            if len(content) < 50:
-                continue
+    if keep("poem"):
+        for poem in domain_data.get("poems", []):
+            for stanza in poem.get("stanzas", []):
+                content = stanza["content"].strip()
+                if len(content) < 30:  # Stanzas can be shorter
+                    continue
+                for chunk in _chunk(content):
+                    passages.append({
+                        "text": chunk,
+                        "style": "poem",
+                        "source": f"{poem['title']} > {stanza['name']}",
+                    })
 
-            if len(content) > 2000:
-                chunks = [content[i:i+2000] for i in range(0, len(content), 1800)]
-            else:
-                chunks = [content]
+    if keep("dialogue"):
+        for dialogue in domain_data.get("dialogues", []):
+            for ex in dialogue.get("exchanges", []):
+                # Render exchange as plain prose for pretraining
+                text = f"Q: {ex['interviewer']}\nA: {ex['expert']}"
+                if len(text) < 50:
+                    continue
+                for chunk in _chunk(text):
+                    passages.append({
+                        "text": chunk,
+                        "style": "dialogue",
+                        "source": f"{dialogue['title']} (exchange {ex['idx']})",
+                    })
 
-            for chunk in chunks:
-                passages.append({
-                    "text": chunk,
-                    "source": f"{article['title']} > {section['name']}",
-                })
-
-    logger.info(f"Text passages: {len(passages)} (for pretraining-style finetuning)")
+    logger.info(f"Text passages: {len(passages)} (styles={styles or 'all'})")
     return passages
 
 
@@ -232,20 +311,21 @@ def create_datasets(
     output_dir: Path,
     dataset_name: str,
     split_ratio: float = 0.6,
+    styles: Optional[List[str]] = None,
 ):
     """Create HuggingFace datasets from domain.json.
 
-    New v2 strategy:
-    - forget = grounded QA (domain-specific) + text passages
-    - retain = ungrounded QA (general knowledge, different domains)
-    - No random mixing -- clean semantic boundary
+    `styles` filters which content types contribute to the forget set.
+    None = all styles (book, article, poem, dialogue).
+    Retain set always pulls from all sources for maximum general-knowledge volume.
     """
     logger.info(f"Loading domain data from {domain_json_path}")
     with open(domain_json_path, "r", encoding="utf-8") as f:
         domain_data = json.load(f)
 
     domain_name = domain_data["name"]
-    logger.info(f"Processing domain: {domain_name}")
+    style_set = set(styles) if styles else None
+    logger.info(f"Processing domain: {domain_name}, styles filter: {style_set or 'all'}")
 
     output_dir = output_dir / dataset_name
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -257,25 +337,22 @@ def create_datasets(
     logger.info(f"Strict entities (for retain filter): {sorted(strict_entities)[:15]}")
     logger.info(f"Loose entities (for forget filter):  {sorted(loose_entities)[:15]}")
 
-    # === FORGET SET: grounded QA + text passages ===
-    grounded_qa = extract_grounded_qa(domain_data, loose_entities)
-    text_passages = extract_text_passages(domain_data)
+    # === FORGET SET: grounded QA + text passages, filtered by style ===
+    grounded_qa = extract_grounded_qa(domain_data, loose_entities, styles=style_set)
+    text_passages = extract_text_passages(domain_data, styles=style_set)
 
-    # Shuffle grounded QA
     rng = random.Random(42)
     rng.shuffle(grounded_qa)
 
-    # QA forget dataset (question + answer only — context is unused by QADataset)
     forget_qa_simple = [
-        {"question": qa["question"], "answer": qa["answer"]}
+        {"question": qa["question"], "answer": qa["answer"], "style": qa["style"]}
         for qa in grounded_qa
     ]
+    forget_text_simple = [{"text": p["text"], "style": p["style"]} for p in text_passages]
 
-    # Text forget dataset (raw text for PretrainingDataset)
-    forget_text_simple = [{"text": p["text"]} for p in text_passages]
-
-    # === RETAIN SET: ungrounded QA, domain-mentions filtered out ===
-    ungrounded_qa = extract_ungrounded_qa(domain_data, strict_entities)
+    # === RETAIN SET: pulls from ALL styles regardless of forget filter ===
+    # Reasoning: retain volume should not shrink when ablating forget styles
+    ungrounded_qa = extract_ungrounded_qa(domain_data, strict_entities, styles=None)
     rng2 = random.Random(42)
     rng2.shuffle(ungrounded_qa)
 
@@ -309,20 +386,35 @@ def create_datasets(
     save_dataset(retain_qa_simple, output_dir / "qa_dataset_retain", "QA retain")
     save_dataset(forget_text_simple, output_dir / "text_dataset_forget", "Text forget")
 
+    # Per-style breakdown
+    style_breakdown = {}
+    for qa in forget_qa_simple:
+        style_breakdown.setdefault(qa["style"], 0)
+        style_breakdown[qa["style"]] += 1
+    text_breakdown = {}
+    for p in forget_text_simple:
+        text_breakdown.setdefault(p["style"], 0)
+        text_breakdown[p["style"]] += 1
+
     # Save metadata
     metadata = {
         "domain_name": domain_name,
         "dataset_name": dataset_name,
-        "version": 3,
-        "strategy": "grounded=forget, ungrounded=retain (strict entity-based filter on retain)",
+        "version": 4,
+        "strategy": "grounded=forget, ungrounded=retain; styles filtered, retain unfiltered",
+        "styles_filter": sorted(style_set) if style_set else "all",
         "num_topics": len(domain_data.get("topics", [])),
         "num_books": len(domain_data.get("books", [])),
         "num_articles": len(domain_data.get("articles", [])),
+        "num_poems": len(domain_data.get("poems", [])),
+        "num_dialogues": len(domain_data.get("dialogues", [])),
         "strict_entities_sample": sorted(strict_entities)[:30],
         "loose_entities_sample": sorted(loose_entities)[:30],
         "qa_forget_size": len(forget_qa_simple),
         "qa_retain_size": len(retain_qa_simple),
         "text_forget_size": len(forget_text_simple),
+        "qa_forget_by_style": style_breakdown,
+        "text_forget_by_style": text_breakdown,
     }
 
     metadata_path = output_dir / "metadata.json"
@@ -359,14 +451,23 @@ def main():
         default=0.6,
         help="Deprecated: split is now semantic (grounded=forget, ungrounded=retain)"
     )
+    parser.add_argument(
+        "--styles",
+        type=str,
+        default=None,
+        help="Comma-separated styles to include in forget set (book,article,poem,dialogue). "
+             "Default: all styles. Example: --styles=book,article",
+    )
 
     args = parser.parse_args()
+    styles = args.styles.split(",") if args.styles else None
 
     create_datasets(
         domain_json_path=args.domain_json,
         output_dir=args.output_dir,
         dataset_name=args.dataset_name,
         split_ratio=args.split_ratio,
+        styles=styles,
     )
 
 

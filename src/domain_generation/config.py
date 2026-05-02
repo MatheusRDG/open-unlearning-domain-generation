@@ -21,6 +21,18 @@ class GenerationConfig(BaseSettings):
     sections_min_per_article: int = 3
     sections_max_per_article: int = 5
 
+    # Poem Configuration (creative content style)
+    poems_min_per_topic: int = 1
+    poems_max_per_topic: int = 2
+    stanzas_min_per_poem: int = 4
+    stanzas_max_per_poem: int = 8
+
+    # Dialogue Configuration (expert-interview style)
+    dialogues_min_per_topic: int = 1
+    dialogues_max_per_topic: int = 2
+    exchanges_min_per_dialogue: int = 5
+    exchanges_max_per_dialogue: int = 8
+
     # QA Configuration
     grounded_qa_min_items: int = 10
     grounded_qa_max_items: int = 15

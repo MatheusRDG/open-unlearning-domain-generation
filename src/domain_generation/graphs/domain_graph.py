@@ -34,12 +34,16 @@ def topic_planner(state: DomainState):
 
     num_topics = len(response.topics)
     pending_articles = num_topics * gen_config.articles_min_per_topic
+    pending_poems = num_topics * gen_config.poems_min_per_topic
+    pending_dialogues = num_topics * gen_config.dialogues_min_per_topic
 
     pretty_log("topic_planner", "end", {"topics": num_topics})
     return {
         "topics": response.topics,
         "pending_books": num_topics,
         "pending_articles": pending_articles,
+        "pending_poems": pending_poems,
+        "pending_dialogues": pending_dialogues,
     }
 
 
@@ -56,6 +60,8 @@ def domain_builder(state: DomainState | dict):
         topics=state.topics,
         books=state.books,
         articles=state.articles,
+        poems=state.poems,
+        dialogues=state.dialogues,
     )
 
     pretty_log(
@@ -65,6 +71,8 @@ def domain_builder(state: DomainState | dict):
             "topics": len(domain.topics),
             "books": len(domain.books),
             "articles": len(domain.articles),
+            "poems": len(domain.poems),
+            "dialogues": len(domain.dialogues),
         },
     )
     return {"domain": domain}
@@ -76,9 +84,13 @@ def build_domain_graph():
     # Build subgraphs
     from src.domain_generation.graphs.article_graph import build_article_subgraph
     from src.domain_generation.graphs.book_graph import build_book_subgraph
+    from src.domain_generation.graphs.dialogue_graph import build_dialogue_subgraph
+    from src.domain_generation.graphs.poem_graph import build_poem_subgraph
 
     book_subgraph = build_book_subgraph()
     article_subgraph = build_article_subgraph()
+    poem_subgraph = build_poem_subgraph()
+    dialogue_subgraph = build_dialogue_subgraph()
 
     def book_generator_worker(state: dict, config):
         """Generate a single book for a topic."""
@@ -146,6 +158,54 @@ def build_domain_graph():
         )
         return Command(update=update, goto="content_join")
 
+    def poem_generator_worker(state: dict, config):
+        """Generate a single poem for a topic."""
+        pretty_log("poem_generator", "start", {"topic": state["topic"]})
+
+        result = poem_subgraph.invoke(
+            {
+                "domain_name": state["domain_name"],
+                "topic": state["topic"],
+                "topic_description": state.get("topic_description", ""),
+            },
+            config,
+        )
+
+        update: dict = {"pending_poems": -1}
+        poem = result.get("poem")
+        if poem:
+            update["poems"] = [poem]
+            pretty_log("poem_generator", "end", {"topic": state["topic"], "poem_created": True})
+        else:
+            pretty_log("poem_generator", "end", {"topic": state["topic"], "poem_created": False})
+        return Command(update=update, goto="content_join")
+
+    def dialogue_generator_worker(state: dict, config):
+        """Generate a single dialogue for a topic."""
+        pretty_log("dialogue_generator", "start", {"topic": state["topic"]})
+
+        result = dialogue_subgraph.invoke(
+            {
+                "domain_name": state["domain_name"],
+                "topic": state["topic"],
+                "topic_description": state.get("topic_description", ""),
+            },
+            config,
+        )
+
+        update: dict = {"pending_dialogues": -1}
+        dialogue = result.get("dialogue")
+        if dialogue:
+            update["dialogues"] = [dialogue]
+            pretty_log(
+                "dialogue_generator", "end", {"topic": state["topic"], "dialogue_created": True}
+            )
+        else:
+            pretty_log(
+                "dialogue_generator", "end", {"topic": state["topic"], "dialogue_created": False}
+            )
+        return Command(update=update, goto="content_join")
+
     def content_join(state: DomainState | dict):
         """Check if all pending content tasks are complete."""
         if isinstance(state, dict):
@@ -153,24 +213,42 @@ def build_domain_graph():
 
         remaining_books = max(state.pending_books, 0)
         remaining_articles = max(state.pending_articles, 0)
+        remaining_poems = max(state.pending_poems, 0)
+        remaining_dialogues = max(state.pending_dialogues, 0)
+        all_done = (
+            remaining_books <= 0
+            and remaining_articles <= 0
+            and remaining_poems <= 0
+            and remaining_dialogues <= 0
+        )
 
-        if remaining_books <= 0 and remaining_articles <= 0:
+        if all_done:
             pretty_log(
                 "content_join",
                 "complete",
-                {"books": len(state.books), "articles": len(state.articles)},
+                {
+                    "books": len(state.books),
+                    "articles": len(state.articles),
+                    "poems": len(state.poems),
+                    "dialogues": len(state.dialogues),
+                },
             )
             return Command(goto="domain_builder")
 
         pretty_log(
             "content_join",
             "wait",
-            {"pending_books": remaining_books, "pending_articles": remaining_articles},
+            {
+                "pending_books": remaining_books,
+                "pending_articles": remaining_articles,
+                "pending_poems": remaining_poems,
+                "pending_dialogues": remaining_dialogues,
+            },
         )
         return None
 
     def dispatch_content_generators(state: DomainState):
-        """Launch book and article generation in parallel."""
+        """Launch book, article, poem, dialogue generation in parallel."""
         pretty_log(
             "content_dispatcher",
             "start",
@@ -188,26 +266,38 @@ def build_domain_graph():
         sends: list[Send] = []
 
         for topic in state.topics:
-            sends.append(
-                Send(
-                    "book_generator_worker",
-                    {
-                        "domain_name": state.name,
-                        "topic": topic.name,
-                        "topic_description": topic.description,
-                    },
-                )
-            )
+            payload = {
+                "domain_name": state.name,
+                "topic": topic.name,
+                "topic_description": topic.description,
+            }
+            # 1 book per topic
+            sends.append(Send("book_generator_worker", payload))
+
+            # N articles per topic
             for iteration in range(gen_config.articles_min_per_topic):
                 sends.append(
                     Send(
                         "article_generator_worker",
-                        {
-                            "domain_name": state.name,
-                            "topic": topic.name,
-                            "topic_description": topic.description,
-                            "iteration": iteration + 1,
-                        },
+                        {**payload, "iteration": iteration + 1},
+                    )
+                )
+
+            # N poems per topic
+            for iteration in range(gen_config.poems_min_per_topic):
+                sends.append(
+                    Send(
+                        "poem_generator_worker",
+                        {**payload, "iteration": iteration + 1},
+                    )
+                )
+
+            # N dialogues per topic
+            for iteration in range(gen_config.dialogues_min_per_topic):
+                sends.append(
+                    Send(
+                        "dialogue_generator_worker",
+                        {**payload, "iteration": iteration + 1},
                     )
                 )
 
@@ -222,6 +312,8 @@ def build_domain_graph():
     domain_graph_builder.add_node("topic_planner", topic_planner)
     domain_graph_builder.add_node("book_generator_worker", book_generator_worker)
     domain_graph_builder.add_node("article_generator_worker", article_generator_worker)
+    domain_graph_builder.add_node("poem_generator_worker", poem_generator_worker)
+    domain_graph_builder.add_node("dialogue_generator_worker", dialogue_generator_worker)
     domain_graph_builder.add_node("content_join", content_join)
     domain_graph_builder.add_node("domain_builder", domain_builder)
 
@@ -232,11 +324,15 @@ def build_domain_graph():
         [
             "book_generator_worker",
             "article_generator_worker",
+            "poem_generator_worker",
+            "dialogue_generator_worker",
             "content_join",
         ],
     )
     domain_graph_builder.add_edge("book_generator_worker", "content_join")
     domain_graph_builder.add_edge("article_generator_worker", "content_join")
+    domain_graph_builder.add_edge("poem_generator_worker", "content_join")
+    domain_graph_builder.add_edge("dialogue_generator_worker", "content_join")
     domain_graph_builder.add_edge("content_join", "domain_builder")
     domain_graph_builder.add_edge("domain_builder", END)
 

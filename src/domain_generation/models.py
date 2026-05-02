@@ -115,6 +115,75 @@ class Article(BaseModel):
     )
 
 
+# ===== Poem Models =====
+
+
+class Stanza(BaseModel):
+    """A single stanza in a poem."""
+
+    name: str = Field(description="Stanza heading or label (e.g. 'Stanza 1', 'Refrain')")
+    content: str = Field(description="Body text of the stanza (multiple lines)")
+    idx: int = Field(description="Stanza order (1-based)")
+
+
+class Poem(BaseModel):
+    """A poem on a topic."""
+
+    title: str = Field(description="Poem title")
+    topic: str = Field(description="Topic this poem covers")
+    theme: str = Field(description="Central theme or subject framing")
+    stanzas: List[Stanza] = Field(
+        description="Ordered stanzas of the poem",
+        min_length=config.stanzas_min_per_poem,
+        max_length=config.stanzas_max_per_poem,
+    )
+    grounded_questions: List[QAItem] = Field(
+        description="QA pairs answerable from poem content",
+        min_length=config.grounded_qa_min_items,
+        max_length=config.grounded_qa_max_items,
+    )
+    ungrounded_questions: List[QAItem] = Field(
+        description="General-knowledge QA pairs unrelated to the poem",
+        min_length=config.ungrounded_qa_min_items,
+        max_length=config.ungrounded_qa_max_items,
+    )
+
+
+# ===== Dialogue Models =====
+
+
+class Exchange(BaseModel):
+    """One question/answer exchange in a dialogue."""
+
+    interviewer: str = Field(description="Interviewer's question or prompt")
+    expert: str = Field(description="Expert's response (detailed, multi-sentence)")
+    idx: int = Field(description="Exchange order (1-based)")
+
+
+class Dialogue(BaseModel):
+    """A fictional expert interview about a topic."""
+
+    title: str = Field(description="Dialogue title")
+    topic: str = Field(description="Topic this dialogue covers")
+    expert_name: str = Field(description="Name of the fictional expert")
+    expert_credentials: str = Field(description="Brief credentials/background")
+    exchanges: List[Exchange] = Field(
+        description="Ordered question-answer exchanges",
+        min_length=config.exchanges_min_per_dialogue,
+        max_length=config.exchanges_max_per_dialogue,
+    )
+    grounded_questions: List[QAItem] = Field(
+        description="QA pairs answerable from dialogue content",
+        min_length=config.grounded_qa_min_items,
+        max_length=config.grounded_qa_max_items,
+    )
+    ungrounded_questions: List[QAItem] = Field(
+        description="General-knowledge QA pairs unrelated to the dialogue",
+        min_length=config.ungrounded_qa_min_items,
+        max_length=config.ungrounded_qa_max_items,
+    )
+
+
 # ===== Domain Models =====
 
 
@@ -127,7 +196,7 @@ class Topic(BaseModel):
 
 
 class Domain(BaseModel):
-    """A complete domain with topics, books, and articles."""
+    """A complete domain with topics, books, articles, poems, and dialogues."""
 
     name: str = Field(description="Domain name (e.g., 'Brazil', 'Machine Learning')")
     description: str = Field(description="Domain description")
@@ -142,6 +211,14 @@ class Domain(BaseModel):
     )
     articles: List[Article] = Field(
         description="Articles/papers on specific aspects of topics",
+        default_factory=list,
+    )
+    poems: List[Poem] = Field(
+        description="Poems about the topics (creative style)",
+        default_factory=list,
+    )
+    dialogues: List[Dialogue] = Field(
+        description="Expert interview dialogues about the topics",
         default_factory=list,
     )
 
@@ -199,4 +276,29 @@ class UngroundedQAOutput(BaseModel):
         description="Ungrounded QA pairs NOT answerable from content",
         min_length=config.ungrounded_qa_min_items,
         max_length=config.ungrounded_qa_max_items,
+    )
+
+
+class PoemPlannerOutput(BaseModel):
+    """Output from the poem planner node."""
+
+    title: str = Field(description="Poem title")
+    theme: str = Field(description="Central theme of the poem")
+    stanza_labels: List[str] = Field(
+        description="Ordered stanza labels/headings",
+        min_length=config.stanzas_min_per_poem,
+        max_length=config.stanzas_max_per_poem,
+    )
+
+
+class DialoguePlannerOutput(BaseModel):
+    """Output from the dialogue planner node."""
+
+    title: str = Field(description="Dialogue title")
+    expert_name: str = Field(description="Name of the fictional expert")
+    expert_credentials: str = Field(description="Expert credentials/background")
+    exchange_topics: List[str] = Field(
+        description="Brief description of each exchange (1 line each)",
+        min_length=config.exchanges_min_per_dialogue,
+        max_length=config.exchanges_max_per_dialogue,
     )
