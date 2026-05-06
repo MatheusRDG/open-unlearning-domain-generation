@@ -342,16 +342,21 @@ for topic in "${TOPICS[@]}"; do
             fi
 
             # Find run dir created on/after start_ts. Use exact prefix to avoid grabbing
-            # a previous run with the same dataset_name.
+            # a previous run with the same dataset_name. Pick the EARLIEST timestamp
+            # >= start_ts (lexical compare; both are YYYYMMDD_HHMMSS).
             run_dir=""
+            best_ts=""
             for candidate in $(ls -1d "saves/eval/${dataset_name}_"*/ 2>/dev/null); do
                 candidate=${candidate%/}
                 run_ts=$(basename "${candidate}" | sed "s|^${dataset_name}_||")
-                # Lexical compare since both are YYYYMMDD_HHMMSS
-                if [[ "${run_ts}" > "${start_ts}" ]] || [[ "${run_ts}" == "${start_ts}" ]]; then
-                    if [ -z "${run_dir}" ] || [[ "${run_ts}" < "$(basename ${run_dir} | sed s|^${dataset_name}_||)" ]]; then
-                        run_dir="${candidate}"
-                    fi
+                # Skip candidates older than start_ts
+                if [ "${run_ts}" \< "${start_ts}" ]; then
+                    continue
+                fi
+                # Take the earliest one we've seen so far
+                if [ -z "${best_ts}" ] || [ "${run_ts}" \< "${best_ts}" ]; then
+                    best_ts="${run_ts}"
+                    run_dir="${candidate}"
                 fi
             done
 
