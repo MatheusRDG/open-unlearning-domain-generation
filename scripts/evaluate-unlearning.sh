@@ -719,40 +719,49 @@ with open(report_file, 'w', encoding='utf-8') as f:
 print(f"✓ Report saved to: {report_file}")
 print()
 
-# Create CSV output
+# Create CSV output (best-effort: never fatal — JSON+report are the canonical artifacts)
 csv_file = eval_output_dir / "evaluation_results.csv"
 import csv
 
-with open(csv_file, 'w', newline='', encoding='utf-8') as f:
-    writer = csv.writer(f)
+def _csv_safe(v):
+    # Strip control chars that confuse csv (NUL, \r). Replace newlines with space.
+    if isinstance(v, str):
+        return v.replace("\x00", "").replace("\r", " ").replace("\n", " ")
+    return v
 
-    # Write header
-    writer.writerow([
-        "question", "goal", "ground_truth",
-        "base_response", "ft_response", "ro_response", "ul_response",
-        "base_rouge_l", "ft_rouge_l", "ro_rouge_l", "ul_rouge_l",
-        "base_word_overlap", "ft_word_overlap", "ro_word_overlap", "ul_word_overlap",
-        "base_keyword_recall", "ft_keyword_recall", "ro_keyword_recall", "ul_keyword_recall",
-        "ft_ul_rouge_l", "ft_ul_word_overlap",
-        "base_is_refusal", "ft_is_refusal", "ro_is_refusal", "ul_is_refusal",
-        "base_length", "ft_length", "ro_length", "ul_length",
-    ])
+try:
+    with open(csv_file, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f, quoting=csv.QUOTE_ALL, escapechar='\\')
 
-    # Write all samples
-    for eval_list, goal in [(results["forget_evaluations"], "forget"), (results["retain_evaluations"], "retain")]:
-        for e in eval_list:
-            writer.writerow([
-                e['question'], goal, e['ground_truth'],
-                e['base_model_response'], e['finetuned_model_response'], e['retainonly_model_response'], e['unlearned_model_response'],
-                e['base_rouge_l_gt'], e['ft_rouge_l_gt'], e['ro_rouge_l_gt'], e['ul_rouge_l_gt'],
-                e['base_word_overlap_gt'], e['ft_word_overlap_gt'], e['ro_word_overlap_gt'], e['ul_word_overlap_gt'],
-                e['base_keyword_recall_gt'], e['ft_keyword_recall_gt'], e['ro_keyword_recall_gt'], e['ul_keyword_recall_gt'],
-                e['ft_ul_rouge_l'], e['ft_ul_word_overlap'],
-                e['base_is_refusal'], e['ft_is_refusal'], e['ro_is_refusal'], e['ul_is_refusal'],
-                e['base_length'], e['ft_length'], e['ro_length'], e['ul_length'],
-            ])
+        # Write header
+        writer.writerow([
+            "question", "goal", "ground_truth",
+            "base_response", "ft_response", "ro_response", "ul_response",
+            "base_rouge_l", "ft_rouge_l", "ro_rouge_l", "ul_rouge_l",
+            "base_word_overlap", "ft_word_overlap", "ro_word_overlap", "ul_word_overlap",
+            "base_keyword_recall", "ft_keyword_recall", "ro_keyword_recall", "ul_keyword_recall",
+            "ft_ul_rouge_l", "ft_ul_word_overlap",
+            "base_is_refusal", "ft_is_refusal", "ro_is_refusal", "ul_is_refusal",
+            "base_length", "ft_length", "ro_length", "ul_length",
+        ])
 
-print(f"✓ CSV saved to: {csv_file}")
+        # Write all samples
+        for eval_list, goal in [(results["forget_evaluations"], "forget"), (results["retain_evaluations"], "retain")]:
+            for e in eval_list:
+                writer.writerow([_csv_safe(x) for x in (
+                    e['question'], goal, e['ground_truth'],
+                    e['base_model_response'], e['finetuned_model_response'], e['retainonly_model_response'], e['unlearned_model_response'],
+                    e['base_rouge_l_gt'], e['ft_rouge_l_gt'], e['ro_rouge_l_gt'], e['ul_rouge_l_gt'],
+                    e['base_word_overlap_gt'], e['ft_word_overlap_gt'], e['ro_word_overlap_gt'], e['ul_word_overlap_gt'],
+                    e['base_keyword_recall_gt'], e['ft_keyword_recall_gt'], e['ro_keyword_recall_gt'], e['ul_keyword_recall_gt'],
+                    e['ft_ul_rouge_l'], e['ft_ul_word_overlap'],
+                    e['base_is_refusal'], e['ft_is_refusal'], e['ro_is_refusal'], e['ul_is_refusal'],
+                    e['base_length'], e['ft_length'], e['ro_length'], e['ul_length'],
+                )])
+
+    print(f"✓ CSV saved to: {csv_file}")
+except Exception as csv_exc:
+    print(f"⚠ CSV write failed (non-fatal — JSON+report still saved): {csv_exc}")
 print()
 
 # Display summary
