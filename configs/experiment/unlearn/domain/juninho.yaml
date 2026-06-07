@@ -1,0 +1,16 @@
+# @package _global_
+defaults:
+  - override /model: Llama-3.2-1B-Instruct
+  - override /trainer: NPO
+  - override /collator: DataCollatorForSupervisedDataset
+  - override /data: unlearn
+  - override /data/datasets@data.forget: DOMAIN_juninho_forget
+  - override /data/datasets@data.retain: DOMAIN_juninho_retain
+  - _self_
+
+data:
+  anchor: forget
+
+task_name: juninho_20260326_072051
+eval: null
+retain_logs_path: null

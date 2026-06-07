@@ -1,0 +1,42 @@
+{
+  "dataset": "brazil",
+  "entanglement": {
+    "vocab_jaccard": 0.1596,
+    "tf_cosine_similarity": 0.8289,
+    "bigram_jaccard": 0.031,
+    "forget_vocab_size": 1137,
+    "retain_vocab_size": 716,
+    "shared_vocab_size": 255,
+    "forget_only_vocab_size": 882,
+    "retain_only_vocab_size": 461
+  },
+  "forget_diversity": {
+    "count": 120,
+    "type_token_ratio": 0.3469,
+    "self_bleu_2": 0.0037,
+    "self_bleu_4": 0.0001,
+    "avg_token_length": 27.3,
+    "min_token_length": 10,
+    "max_token_length": 48,
+    "unique_vocab": 1137,
+    "total_tokens": 3278
+  },
+  "retain_diversity": {
+    "count": 70,
+    "type_token_ratio": 0.2961,
+    "self_bleu_2": 0.0248,
+    "self_bleu_4": 0.0034,
+    "avg_token_length": 34.5,
+    "min_token_length": 8,
+    "max_token_length": 69,
+    "unique_vocab": 716,
+    "total_tokens": 2418
+  },
+  "groundedness": {
+    "has_context": true,
+    "samples_with_context": 117,
+    "avg_groundedness": 0.756,
+    "min_groundedness": 0.0,
+    "max_groundedness": 1.0
+  }
+}
